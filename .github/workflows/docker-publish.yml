@@ -31,3 +31,12 @@ jobs:
           push: true
           tags: |
             provokingchaos/stream-recorder:latest
+
+      - name: Update Docker Hub Description
+        uses: peter-evans/dockerhub-description@v4
+        with:
+          username: ${{ secrets.DOCKERHUB_USERNAME }}
+          password: ${{ secrets.DOCKERHUB_TOKEN }}
+          repository: provokingchaos/stream-recorder
+          short-description: "Automated stream recording platform with scheduling, live telemetry, and Telegram alerts."
+          readme-filepath: ./README.md
