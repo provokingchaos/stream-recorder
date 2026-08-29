@@ -38,3 +38,4 @@ __pycache__/
 # Explicitly ensure Telegram config is tracked
 !app/messages.json
 !messages.json
+*.bak
