@@ -1,68 +1,40 @@
-# Stream Recorder
-
-A lightweight, automated stream recording and scheduling platform packaged as a Docker container. Built with FastAPI, SQLite, APScheduler, and FFmpeg, Stream Recorder provides real-time capture, dynamic telemetry, browser-based management, and instant Telegram delivery notifications.
-
----
-
-## Key Features
-
-- **Automated Scheduling:** Precision scheduling powered by AsyncIO APScheduler with strict UTC normalization to prevent missed jobs.
-- **Manual & Scheduled Capture:** Record live internet radio streams, sports feeds, and HLS/audio links directly to high-quality MP3s via FFmpeg.
-- **Live Telemetry Dashboard:** Real-time, per-second calculation of active recording duration and disk file size growth via an Alpine.js/Tailwind UI.
-- **Standardized Metadata & Naming:** Clean, structured file output following the pattern:
-  `{Stream_Label}_{Description}_{YYYY-MM-DD_HH-MM-SS}.mp3`
-- **Instant Telegram Alerts:** High-contrast, scannable HTML notification cards dispatched automatically when recordings begin, conclude, or encounter stream connection state changes.
-- **Zero-External-Dependency Notifications:** Built-in standard library HTTP client ensures reliable dispatch without third-party API wrapper fragility.
-- **Lightweight & Self-Contained:** Runs in a single container with persistent volume mounts for recordings and database configuration.
-
----
-
-## Architecture Overview
-
-
-
+Stream Recorder
+A lightweight, automated stream recording and scheduling platform packaged as a multi-architecture Docker container. Built with FastAPI, SQLite, APScheduler, and FFmpeg, Stream Recorder delivers real-time capture, live telemetry, browser-based management, and instant HTML Telegram notifications.
+Features
+Automated Scheduling: AsyncIO APScheduler job engine with strict UTC normalization to ensure accurate execution across time zones.
+Manual & Scheduled Capture: Records live internet radio streams, sports broadcasts, and direct audio feeds to high-quality MP3s via FFmpeg.
+Live Telemetry Dashboard: Computes active recording duration and disk file size growth on the fly every second via an Alpine.js and Tailwind CSS frontend.
+Structured Filename Convention: Standardizes recorded files according to the format:
+{StreamName}_{Description}_{YYYY-MM-DD_HH-MM-SS}.mp3
+Instant Telegram Delivery Alerts: Dispatches clean, high-contrast HTML notification cards with custom icons for recording start, recording stop, and stream connection changes.
+Dependency-Free Notification Engine: Utilizes Python standard library HTTP handlers for Telegram dispatch without third-party wrapper overhead.
+Multi-Architecture Support: Built for both linux/amd64 and linux/arm64 architectures.
+Repository Structure
+Plaintext
+├── .github/
+│   └── workflows/
+│       └── docker-publish.yml # Multi-arch build, push, and Docker Hub sync
 ├── app/
-│ ├── main.py # FastAPI application, route handlers, and API endpoints
-│ ├── database.py # SQLite connection manager and persistent event logger
-│ ├── recorder.py # FFmpeg process management and file metadata writer
-│ ├── scheduler.py # APScheduler job engine and UTC lifecycle handlers
-│ ├── notifier.py # HTML Telegram notification dispatch service
-│ ├── sniffer.py # Stream availability and connection verification
-│ ├── messages.json # Customizable Telegram message templates
-│ └── static/
-│ └── index.html # Single-page dashboard interface (Alpine.js + Tailwind)
-├── Dockerfile # Python 3.12 + FFmpeg runtime environment
-├── docker-compose.yml # Multi-volume container definition
-└── requirements.txt # Python application dependencies
-
-
-
----
-
-## Quick Start
-
-### 1. Prerequisites
-- [Docker](https://docs.docker.com/get-docker/)
-- [Docker Compose](https://docs.docker.com/compose/install/)
-
-### 2. Clone the Repository
-```bash
-git clone [https://github.com/provokingchaos/stream-recorder.git](https://github.com/provokingchaos/stream-recorder.git)
-cd stream-recorder
-
-
-3. Configure docker-compose.yml
-Ensure your volume paths map cleanly to your host storage:
-
-
-
+│   ├── main.py                # FastAPI endpoints and Uvicorn log filters
+│   ├── database.py            # SQLite schema management and event logging
+│   ├── recorder.py            # FFmpeg process execution and metadata tagging
+│   ├── scheduler.py           # APScheduler job definitions and UTC handlers
+│   ├── notifier.py            # HTML Telegram alert delivery service
+│   ├── sniffer.py             # Stream health verification and probing
+│   ├── messages.json          # Default Telegram message templates
+│   └── static/
+│       └── index.html         # Single-page web dashboard
+├── Dockerfile                 # Multi-stage Python 3.12 + FFmpeg runtime
+├── docker-compose.yml         # Container and volume orchestration
+└── requirements.txt           # Python application dependencies
+Quick Start
+1. Using Docker Compose (Recommended)
+Create a docker-compose.yml file:
 YAML
-version: "3.8"
-
 services:
   stream_recorder:
+    image: provokingchaos/stream-recorder:latest
     container_name: stream_recorder
-    build: .
     restart: unless-stopped
     ports:
       - "8000:8000"
@@ -71,103 +43,66 @@ services:
       - ./recordings:/recordings
     environment:
       - TZ=America/Chicago
-
-
-4. Build and Launch
-
-
-
+Start the container:
 Bash
-docker compose up -d --build
-
-
-Access the web interface at http://<host-ip>:8000.
-Configuration
+docker compose up -d
+Access the dashboard at http://<host-ip>:8000.
+2. Using Docker CLI
+Bash
+docker run -d \
+  --name stream_recorder \
+  --restart unless-stopped \
+  -p 8000:8000 \
+  -v $(pwd)/config:/config \
+  -v $(pwd)/recordings:/recordings \
+  -e TZ=America/Chicago \
+  provokingchaos/stream-recorder:latest
 Telegram Notifications
-Configure notification settings directly within the Settings tab on the web dashboard or via SQLite:
-Setting Key
-Description
-Default
-telegram_token
-Your Telegram Bot Token obtained from @BotFather
-""
-telegram_chat_id
-Target Channel, Group, or User Chat ID
-""
-notif_sched_start
-Notify when a scheduled recording starts
-true
-notif_sched_stop
-Notify when a scheduled recording finishes
-true
-notif_manual_start
-Notify when a manual recording starts
-true
-notif_manual_stop
-Notify when a manual recording finishes
-true
-
-Customizing Alert Templates
-Notification templates are defined in app/messages.json (and persisted under /config/messages.json). You can customize the HTML structure using the following tokens:
-{stream_label}: Name/label of the configured stream.
-{desc_text}: Contextual description or matchup title.
+Configure Telegram alerts directly from the Settings view in the web UI or inject credentials into /config/stream_recorder.db.
+Supported Settings
+Setting Key	Description	Default
+telegram_token	Bot token provided by @BotFather	""
+telegram_chat_id	Target Channel, Group, or Direct Chat ID	""
+notif_sched_start	Alert when a scheduled recording begins	true
+notif_sched_stop	Alert when a scheduled recording finishes	true
+notif_manual_start	Alert when a manual recording begins	true
+notif_manual_stop	Alert when a manual recording finishes	true
+notif_stream_connected	Alert when a stream source connects	true
+notif_stream_disconnected	Alert when a stream source drops	true
+Alert Formatting & Template Tokens
+Message templates reside in app/messages.json and are persisted to /config/messages.json. The following tokens are dynamically interpolated:
+{stream_label}: Configured name of the stream source.
+{desc_text}: Event description or matchup title.
 {start_str}: Formatted start time.
-{end_str}: Formatted completion time.
-{now_str}: Exact timestamp of event execution.
-Default Template Format:
-
-
-
+{end_str}: Formatted finish time.
+{now_str}: Timestamp of event execution.
 JSON
 {
   "notif_sched_start": "🎙️ <b>RECORDING STARTED</b>\n<b>Stream:</b> <code>{stream_label}</code>{desc_text}\n<b>Window:</b> <code>{start_str} - {end_str}</code>",
   "notif_sched_stop": "⏹ <b>RECORDING COMPLETED</b>\n<b>Stream:</b> <code>{stream_label}</code>{desc_text}\n<b>Finished:</b> <code>{now_str}</code>",
+  "notif_manual_start": "🎙️ <b>MANUAL RECORDING STARTED</b>\n<b>Stream:</b> <code>{stream_label}</code>{desc_text}\n<b>Started:</b> <code>{start_str}</code>",
+  "notif_manual_stop": "⏹ <b>MANUAL RECORDING COMPLETED</b>\n<b>Stream:</b> <code>{stream_label}</code>{desc_text}\n<b>Finished:</b> <code>{now_str}</code>",
   "notif_stream_connected": "🟢 <b>STREAM CONNECTED</b>\n<b>Stream:</b> <code>{stream_label}</code>",
   "notif_stream_disconnected": "⚠️ <b>STREAM DISCONNECTED</b>\n<b>Stream:</b> <code>{stream_label}</code>"
 }
-
-
 API Reference
-Method
-Endpoint
-Description
-GET
-/api/streams
-List all configured audio streams
-POST
-/api/streams
-Add a new audio stream source
-GET
-/api/recordings
-List recording history and live telemetry for active jobs
-POST
-/api/recordings/start
-Trigger an immediate manual recording
-POST
-/api/recordings/stop
-Terminate an active recording process
-GET
-/api/schedules
-Fetch all upcoming and past scheduled jobs
-POST
-/api/schedules
-Create a new scheduled recording job
-DELETE
-/api/schedules/{id}
-Cancel and delete a scheduled recording
-GET
-/api/settings
-Retrieve system and notification settings
-POST
-/api/settings
-Update configuration parameters
-
-Database Management & Persistence
-Application state is managed in SQLite at /config/stream_recorder.db. The core database schema includes:
-streams: Registered audio endpoints, URLs, and labels.
-schedules: Time-slotted jobs with ISO-8601 UTC timestamps and descriptions.
-recordings: Complete file paths, execution status, byte sizes, and duration metadata.
-settings: Runtime key-value storage for application preferences and credentials.
-logs: Persistent operational and error logging table.
+HTTP Method	Endpoint	Description
+GET	/api/streams	List registered stream sources
+POST	/api/streams	Add a new stream URL and label
+GET	/api/recordings	List completed and active recordings with live duration and byte counts
+POST	/api/recordings/start	Start an immediate recording session
+POST	/api/recordings/stop	Terminate an active recording process
+GET	/api/schedules	List upcoming and completed schedule entries
+POST	/api/schedules	Create a new scheduled capture window
+DELETE	/api/schedules/{id}	Delete a scheduled recording job
+GET	/api/settings	Retrieve system preferences and Telegram credentials
+POST	/api/settings	Save application preferences and alert toggles
+Persistent Storage & Database Schema
+Application state is preserved inside /config/stream_recorder.db across container restarts:
+streams: Stream identifiers, feed URLs, and friendly names.
+schedules: Scheduled start/end windows stored in UTC, stream IDs, and descriptions.
+recordings: Filepaths, exit statuses, duration metrics, and disk sizes.
+settings: Key-value pairs for system options and notification tokens.
+logs: Centralized event and execution history.
 License
-Distributed under the MIT License.
+This project is licensed under the MIT License.
