@@ -4,3 +4,37 @@ __pycache__/
 config/
 recordings/
 *.db
+
+# SQLite databases & journals
+*.db
+*.db-journal
+*.sqlite
+*.sqlite3
+/config/*.db
+/config/*.db-journal
+
+# Recordings & Media outputs
+/recordings/
+*.mp3
+*.m4a
+*.wav
+*.aac
+*.ts
+
+# Application logs
+*.log
+/logs/
+/config/*.log
+
+# Environment & local credentials
+.env
+.env.local
+
+# Python / System caches
+__pycache__/
+*.py[cod]
+.DS_Store
+
+# Explicitly ensure Telegram config is tracked
+!app/messages.json
+!messages.json

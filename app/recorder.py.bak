@@ -1,0 +1,173 @@
+import os
+import sys
+import shutil
+import asyncio
+import datetime
+import urllib.parse
+from pathlib import Path
+from mutagen.easyid3 import EasyID3
+from mutagen.mp3 import MP3
+from app.database import get_db, get_setting
+from app.notifier import send_telegram_alert
+
+active_recordings = {}
+
+class StreamRecorder:
+    def __init__(self, stream_id: int, label: str, stream_url: str, duration_minutes: int = None):
+        self.stream_id = stream_id
+        self.label = "".join(c for c in label if c.isalnum() or c in (" ", "_", "-")).rstrip()
+        if not self.label:
+            self.label = "Unknown_Stream"
+        self.stream_url = stream_url.strip()
+        self.duration_minutes = duration_minutes
+        self.process = None
+        self.task = None
+        self.db_id = None
+        self.part_path = None
+        self.final_path = None
+        self.start_time = None
+
+    def get_recordings_dir(self) -> Path:
+        dir_path = Path(get_setting("recordings_dir", "/recordings"))
+        dir_path.mkdir(parents=True, exist_ok=True)
+        return dir_path
+
+    async def start(self):
+        rec_dir = self.get_recordings_dir()
+        stat = shutil.disk_usage(rec_dir)
+        if (stat.free / (1024 * 1024 * 1024)) < 2.0:
+            await send_telegram_alert(f"⚠️ *Recording Aborted*: Low disk space (< 2 GB) for `{self.label}`.")
+            return
+
+        self.start_time = datetime.datetime.now()
+        timestamp_str = self.start_time.strftime("%Y-%m-%d_%H-%M-%S")
+        filename_base = f"{self.label}_{timestamp_str}"
+        self.part_path = rec_dir / f"{filename_base}.mp3.part"
+        self.final_path = rec_dir / f"{filename_base}.mp3"
+
+        with get_db() as conn:
+            cursor = conn.cursor()
+            cursor.execute(
+                "INSERT INTO recordings (stream_id, filename, filepath, status) VALUES (?, ?, ?, 'recording')",
+                (self.stream_id, self.final_path.name, str(self.final_path))
+            )
+            self.db_id = cursor.lastrowid
+            conn.commit()
+
+        active_recordings[self.db_id] = self
+        self.task = asyncio.create_task(self._run_recording())
+        await send_telegram_alert(f"🎙️ *Started Recording*: `{self.label}`\nFile: `{self.final_path.name}`")
+
+    async def _run_recording(self):
+        user_agent = "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36"
+        
+        # Dynamically build base Referer/Origin headers from the stream URL host
+        parsed = urllib.parse.urlparse(self.stream_url)
+        referer = f"{parsed.scheme}://{parsed.netloc}/"
+
+        headers_str = (
+            f"User-Agent: {user_agent}\r\n"
+            f"Referer: {referer}\r\n"
+            f"Accept: */*\r\n"
+            f"Icy-MetaData: 1\r\n"
+        )
+
+        cmd = [
+            "ffmpeg", "-hide_banner", "-loglevel", "warning",
+            "-headers", headers_str,
+            "-reconnect", "1", "-reconnect_at_eof", "1", "-reconnect_streamed", "1", "-reconnect_delay_max", "15",
+            "-rw_timeout", "15000000",
+            "-i", self.stream_url,
+            "-vn", "-c:a", "libmp3lame", "-b:a", "192k",
+            "-id3v2_version", "3",
+            "-metadata", f"title={self.label} - {self.start_time.strftime('%Y-%m-%d')}",
+            "-metadata", f"artist={self.label}",
+            "-metadata", "album=Stream Recorder Captures",
+            "-y", str(self.part_path)
+        ]
+
+        print(f"[*] Universal FFmpeg capture starting: {self.label} -> {self.stream_url}", flush=True)
+
+        self.process = await asyncio.create_subprocess_exec(
+            *cmd,
+            stdin=asyncio.subprocess.PIPE,
+            stdout=asyncio.subprocess.PIPE,
+            stderr=asyncio.subprocess.PIPE
+        )
+
+        async def monitor_stderr():
+            while True:
+                line = await self.process.stderr.readline()
+                if not line:
+                    break
+                print(f"[FFmpeg - {self.label}]: {line.decode().strip()}", file=sys.stderr, flush=True)
+
+        asyncio.create_task(monitor_stderr())
+
+        try:
+            if self.duration_minutes:
+                await asyncio.sleep(self.duration_minutes * 60)
+                await self.stop()
+            else:
+                await self.process.wait()
+        except asyncio.CancelledError:
+            pass
+        finally:
+            await self._finalize()
+
+    async def stop(self):
+        if self.process and self.process.returncode is None:
+            try:
+                self.process.stdin.write(b"q")
+                await self.process.stdin.drain()
+                await asyncio.wait_for(self.process.wait(), timeout=5.0)
+            except Exception:
+                try:
+                    self.process.terminate()
+                except Exception:
+                    pass
+        if self.task and not self.task.done():
+            self.task.cancel()
+
+    async def _finalize(self):
+        if self.db_id in active_recordings:
+            del active_recordings[self.db_id]
+
+        file_size = 0
+        duration_seconds = 0
+
+        if self.part_path and self.part_path.exists():
+            file_size = self.part_path.stat().st_size
+            if file_size > 0:
+                os.rename(self.part_path, self.final_path)
+                try:
+                    audio = MP3(self.final_path, ID3=EasyID3)
+                    duration_seconds = int(audio.info.length)
+                except Exception:
+                    pass
+            else:
+                try:
+                    os.remove(self.part_path)
+                except OSError:
+                    pass
+
+        status_result = 'completed' if file_size > 0 else 'failed'
+        size_mb = round(file_size / (1024 * 1024), 2)
+
+        with get_db() as conn:
+            conn.execute(
+                """UPDATE recordings 
+                   SET status = ?, duration_seconds = ?, file_size_bytes = ?, ended_at = CURRENT_TIMESTAMP 
+                   WHERE id = ?""",
+                (status_result, duration_seconds, file_size, self.db_id)
+            )
+            conn.commit()
+
+        if status_result == 'completed':
+            await send_telegram_alert(
+                f"⏹️ *Stopped Recording*: `{self.label}`\nSize: `{size_mb} MB`\nDuration: `{datetime.timedelta(seconds=duration_seconds)}`"
+            )
+        else:
+            await send_telegram_alert(
+                f"❌ *Recording Failed*: `{self.label}` captured 0 bytes. Check stream connection."
+            )

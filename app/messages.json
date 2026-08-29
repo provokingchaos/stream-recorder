@@ -1,0 +1,6 @@
+{
+    "notif_sched_start": "\ud83c\udf99\ufe0f <b>RECORDING STARTED</b>\n<b>Stream:</b> <code>{stream_label}</code>{desc_text}\n<b>Window:</b> <code>{start_str} - {end_str}</code>",
+    "notif_sched_stop": "\u23f9 <b>RECORDING COMPLETED</b>\n<b>Stream:</b> <code>{stream_label}</code>{desc_text}\n<b>Finished:</b> <code>{now_str}</code>",
+    "notif_stream_connected": "\ud83d\udfe2 <b>STREAM CONNECTED</b>\n<b>Stream:</b> <code>{stream_label}</code>",
+    "notif_stream_disconnected": "\u26a0\ufe0f <b>STREAM DISCONNECTED</b>\n<b>Stream:</b> <code>{stream_label}</code>"
+}

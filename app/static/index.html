@@ -1,386 +1,517 @@
 <!DOCTYPE html>
-<html lang="en" x-data="app()" :class="{ 'dark': darkMode }">
+<html lang="en" :class="darkMode ? 'dark' : ''" x-data="appData()">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Stream Recorder</title>
+    <title>Stream Recorder Engine</title>
     <script src="https://cdn.tailwindcss.com"></script>
-    <script defer src="https://cdn.jsdelivr.net/npm/alpinejs@3.x.x/dist/cdn.min.js"></script>
-    <script>
-        tailwind.config = {
-            darkMode: 'class',
-            theme: { extend: { colors: { darkbg: '#0f172a', darkcard: '#1e293b' } } }
-        }
-    </script>
+    <script defer src="https://cdn.jsdelivr.net/npm/alpinejs@3.13.3/dist/cdn.min.js"></script>
+    <script>tailwind.config = { darkMode: 'class' }</script>
 </head>
-<body class="bg-gray-50 dark:bg-darkbg text-gray-800 dark:text-gray-100 min-h-screen transition-colors duration-200">
-    <div class="max-w-7xl mx-auto p-6 pb-32">
-        <header class="flex flex-col md:flex-row justify-between items-center mb-8 pb-4 border-b border-gray-200 dark:border-gray-700 gap-4">
-            <div>
-                <h1 class="text-2xl font-bold tracking-tight">Stream Recorder</h1>
-                <p class="text-sm text-gray-500 dark:text-gray-400">Audio stream extraction and resilient scheduling</p>
-            </div>
-            
-            <div class="flex items-center gap-2 bg-gray-200 dark:bg-gray-800 p-1 rounded-lg">
-                <template x-for="tab in ['dashboard', 'library', 'schedules', 'settings']" :key="tab">
-                    <button @click="currentTab = tab" 
-                        :class="currentTab === tab ? 'bg-white dark:bg-gray-600 shadow-sm text-blue-600 dark:text-white' : 'text-gray-500 hover:text-gray-700 dark:hover:text-gray-300'"
-                        class="px-4 py-2 rounded-md text-sm font-medium capitalize transition-all">
-                        <span x-text="tab"></span>
-                    </button>
-                </template>
-                <button @click="toggleTheme()" class="ml-2 p-2 text-gray-500 hover:text-gray-800 dark:hover:text-white">
-                    <span x-text="darkMode ? '☀️' : '🌙'"></span>
-                </button>
-            </div>
-        </header>
-
-        <!-- DASHBOARD TAB (Recordings) -->
-        <div x-show="currentTab === 'dashboard'">
-            <section class="bg-white dark:bg-darkcard p-6 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700">
-                <h2 class="text-lg font-semibold mb-4">Recordings History</h2>
-                <div class="overflow-x-auto">
-                    <table class="w-full text-left text-sm">
-                        <thead>
-                            <tr class="border-b border-gray-200 dark:border-gray-700 text-gray-500 dark:text-gray-400">
-                                <th class="py-2">Filename</th>
-                                <th class="py-2">Status</th>
-                                <th class="py-2">Size / Duration</th>
-                                <th class="py-2 text-right">Actions</th>
-                            </tr>
-                        </thead>
-                        <tbody>
-                            <template x-for="rec in recordings" :key="rec.id">
-                                <tr class="border-b border-gray-100 dark:border-gray-800">
-                                    <td class="py-3 font-mono text-xs" x-text="rec.filename"></td>
-                                    <td class="py-3">
-                                        <span :class="{'text-green-500': rec.status === 'completed', 'text-yellow-500': rec.status === 'recording', 'text-red-500': rec.status === 'interrupted'}" class="text-xs uppercase font-bold" x-text="rec.status"></span>
-                                    </td>
-                                    <td class="py-3 text-xs" x-text="(rec.file_size_bytes / (1024*1024)).toFixed(2) + ' MB'"></td>
-                                    <td class="py-3 text-right space-x-2">
-                                        <button x-show="rec.status === 'completed'" @click="playAudio(rec.filename)" class="px-3 py-1 bg-blue-600 text-white rounded text-xs hover:bg-blue-700">Play</button>
-                                        <button x-show="rec.status === 'recording'" @click="stopRecord(rec.id)" class="px-3 py-1 bg-red-600 text-white rounded text-xs hover:bg-red-700">Stop</button>
-                                        <button @click="confirmDelete('recording', rec.id)" class="px-3 py-1 bg-gray-200 dark:bg-gray-700 rounded text-xs hover:bg-gray-300 dark:hover:bg-gray-600">Delete</button>
-                                    </td>
-                                </tr>
-                            </template>
-                        </tbody>
-                    </table>
-                </div>
-            </section>
+<body class="bg-gray-50 dark:bg-gray-900 text-gray-900 dark:text-gray-100 font-sans pb-24 transition-colors">
+    <div class="max-w-6xl mx-auto p-6">
+        
+        <div class="flex justify-between items-center mb-6">
+            <h1 class="text-3xl font-bold text-gray-800 dark:text-white">Stream Recorder Engine</h1>
+            <button @click="toggleDarkMode" class="p-2 bg-gray-200 dark:bg-gray-700 rounded-lg text-lg hover:scale-110 transition-transform">
+                <span x-text="darkMode ? '☀️' : '🌙'"></span>
+            </button>
+        </div>
+        
+        <div class="flex space-x-4 mb-6 border-b border-gray-300 dark:border-gray-700 pb-2 overflow-x-auto">
+            <button @click="activeTab = 'dashboard'" :class="activeTab === 'dashboard' ? 'border-b-2 border-blue-600 text-blue-600 dark:text-blue-400' : 'text-gray-500 dark:text-gray-400'" class="px-4 py-2 font-semibold whitespace-nowrap">Dashboard</button>
+            <button @click="activeTab = 'library'" :class="activeTab === 'library' ? 'border-b-2 border-blue-600 text-blue-600 dark:text-blue-400' : 'text-gray-500 dark:text-gray-400'" class="px-4 py-2 font-semibold whitespace-nowrap">Library</button>
+            <button @click="activeTab = 'schedules'" :class="activeTab === 'schedules' ? 'border-b-2 border-blue-600 text-blue-600 dark:text-blue-400' : 'text-gray-500 dark:text-gray-400'" class="px-4 py-2 font-semibold whitespace-nowrap">Schedules</button>
+            <button @click="activeTab = 'settings'" :class="activeTab === 'settings' ? 'border-b-2 border-blue-600 text-blue-600 dark:text-blue-400' : 'text-gray-500 dark:text-gray-400'" class="px-4 py-2 font-semibold whitespace-nowrap">Settings</button>
+            <button @click="activeTab = 'logs'" :class="activeTab === 'logs' ? 'border-b-2 border-blue-600 text-blue-600 dark:text-blue-400' : 'text-gray-500 dark:text-gray-400'" class="px-4 py-2 font-semibold whitespace-nowrap">App Logs</button>
         </div>
 
-        <!-- LIBRARY TAB (Discover & Saved Streams) -->
-        <div x-show="currentTab === 'library'">
-            <section class="bg-white dark:bg-darkcard p-6 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700 mb-6">
-                <h2 class="text-lg font-semibold mb-4">Discover Stream URL</h2>
-                <div class="flex gap-4">
-                    <input type="text" x-model="probeUrl" placeholder="Enter station URL (SPA or direct player)" class="flex-1 px-4 py-2 bg-gray-50 dark:bg-gray-800 border border-gray-300 dark:border-gray-600 rounded-lg text-sm">
-                    <button @click="probeStream()" :disabled="loading" class="px-5 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50 text-sm">
-                        <span x-text="loading ? 'Sniffing...' : 'Probe Page'"></span>
+        <div x-show="activeTab === 'dashboard'" x-cloak>
+            <h2 class="text-xl font-bold mb-4">Live Recordings & History</h2>
+            <div class="bg-white dark:bg-gray-800 rounded-lg shadow overflow-hidden">
+                <table class="min-w-full divide-y divide-gray-200 dark:divide-gray-700">
+                    <thead class="bg-gray-100 dark:bg-gray-700">
+                        <tr>
+                            <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase">Stream</th>
+                            <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase">File Name</th>
+                            <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase">Status</th>
+                            <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase">Size (MB)</th>
+                            <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase">Duration</th>
+                            <th class="px-4 py-3 text-right text-xs font-medium text-gray-500 dark:text-gray-300 uppercase">Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody class="divide-y divide-gray-200 dark:divide-gray-700">
+                        <template x-for="rec in recordings" :key="rec.id">
+                            <tr :class="rec.status === 'recording' ? 'bg-red-50 dark:bg-red-900/20' : 'bg-white dark:bg-gray-800'">
+                                <td class="px-4 py-3 text-sm font-semibold" x-text="rec.stream_label || (rec.filename ? rec.filename.split('_')[0] : 'Unknown')"></td>
+                                <td class="px-4 py-3 text-xs font-mono text-gray-500 dark:text-gray-400 break-all" x-text="rec.filename || 'N/A'"></td>
+                                <td class="px-4 py-3 text-sm">
+                                    <span class="px-2 py-1 text-xs font-semibold rounded-full" 
+                                          :class="rec.status === 'recording' ? 'bg-red-200 text-red-800 dark:bg-red-800 dark:text-red-200' : (rec.status === 'completed' ? 'bg-green-200 text-green-800 dark:bg-green-800 dark:text-green-200' : 'bg-gray-200 text-gray-800 dark:bg-gray-600 dark:text-gray-200')"
+                                          x-text="rec.status.toUpperCase()"></span>
+                                </td>
+                                <td class="px-4 py-3 text-sm font-mono" x-text="formatSize(rec.file_size_bytes)"></td>
+                                <td class="px-4 py-3 text-sm font-mono" x-text="formatDuration(rec.duration_seconds)"></td>
+                                <td class="px-4 py-3 text-right flex justify-end items-center gap-3">
+                                    <template x-if="rec.status === 'completed'">
+                                        <div class="flex items-center gap-3">
+                                            <button @click="togglePlay(`/api/recordings/${rec.id}/play`)" title="Toggle Playback" class="text-xl hover:scale-125 transition-transform" x-text="globalAudioUrl === `/api/recordings/${rec.id}/play` ? '⏹️' : '▶️'"></button>
+                                            <a :href="`/api/recordings/${rec.id}/download`" download title="Download Recording" class="text-xl hover:scale-125 transition-transform">⬇️</a>
+                                        </div>
+                                    </template>
+                                    <template x-if="rec.status === 'recording'">
+                                        <button @click="stopRecording(rec.id)" class="text-red-600 hover:text-red-800 dark:text-red-400 font-semibold text-sm">Stop</button>
+                                    </template>
+                                    <button @click="deleteRecording(rec.id)" class="text-red-600 hover:text-red-800 dark:text-red-400 font-semibold text-sm">Delete</button>
+                                </td>
+                            </tr>
+                        </template>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+
+        <div x-show="activeTab === 'library'" x-cloak>
+            <div class="bg-white dark:bg-gray-800 rounded-lg shadow p-6 mb-6">
+                <h2 class="text-xl font-bold mb-4">Discover Stream URL</h2>
+                <div class="flex gap-4 mb-4">
+                    <input type="text" x-model="probeUrl" placeholder="https://station-website.com/" class="flex-1 px-4 py-2 border dark:border-gray-600 rounded-lg bg-gray-50 dark:bg-gray-700">
+                    <button @click="probeStream()" :disabled="isProbing || !probeUrl" class="px-6 py-2 bg-blue-600 text-white font-semibold rounded-lg hover:bg-blue-700 disabled:opacity-50 w-32">
+                        <span x-text="isProbing ? 'Probing' : 'Probe'"></span>
                     </button>
                 </div>
-                <template x-if="discoveredUrl">
-                    <div class="mt-4 p-4 bg-gray-50 dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700">
-                        <div class="mb-3 text-xs font-mono break-all text-blue-500" x-text="discoveredUrl"></div>
-                        <div class="flex gap-3">
-                            <input type="text" x-model="streamLabel" placeholder="Station Label" class="px-3 py-2 bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-lg text-sm flex-1">
-                            <button @click="saveStream()" class="px-4 py-2 bg-green-600 text-white rounded-lg text-sm hover:bg-green-700">Save Stream</button>
+                <template x-if="discoveredUrls.length > 0">
+                    <div class="p-4 bg-gray-50 dark:bg-gray-700 border dark:border-gray-600 rounded-lg">
+                        <p class="text-sm font-semibold mb-3">Select the correct stream (Test them below):</p>
+                        <div class="space-y-3 max-h-72 overflow-y-auto mb-4 pr-2">
+                            <template x-for="(url, index) in discoveredUrls" :key="index">
+                                <label class="flex items-center gap-3 p-3 bg-white dark:bg-gray-800 border dark:border-gray-600 rounded-lg cursor-pointer" :class="selectedUrl === url ? 'border-blue-500 ring-1 ring-blue-500' : ''">
+                                    <input type="radio" :value="url" x-model="selectedUrl" class="text-blue-600">
+                                    <div class="flex-1 min-w-0 w-full">
+                                        <div class="text-xs font-mono break-all text-gray-800 dark:text-gray-300 mb-2" x-text="url"></div>
+                                        <audio controls preload="none" :src="url" class="h-8 w-full max-w-md"></audio>
+                                    </div>
+                                </label>
+                            </template>
+                        </div>
+                        <div class="flex gap-3 pt-3 border-t dark:border-gray-600">
+                            <input type="text" x-model="streamLabel" placeholder="Station Label" class="px-3 py-2 border dark:border-gray-600 bg-white dark:bg-gray-800 rounded-lg flex-1">
+                            <button @click="saveStream()" class="px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700" :disabled="!selectedUrl || !streamLabel">Save Stream</button>
                         </div>
                     </div>
                 </template>
-            </section>
+            </div>
 
-            <section class="bg-white dark:bg-darkcard p-6 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700">
-                <h2 class="text-lg font-semibold mb-4">Saved Streams</h2>
-                <div class="overflow-x-auto">
-                    <table class="w-full text-left text-sm">
-                        <thead>
-                            <tr class="border-b border-gray-200 dark:border-gray-700 text-gray-500 dark:text-gray-400">
-                                <th class="py-2">Label</th>
-                                <th class="py-2">Stream Source</th>
-                                <th class="py-2 text-right">Actions</th>
+            <div class="bg-white dark:bg-gray-800 rounded-lg shadow overflow-hidden">
+                <table class="min-w-full divide-y divide-gray-200 dark:divide-gray-700">
+                    <thead class="bg-gray-100 dark:bg-gray-700">
+                        <tr>
+                            <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase">Label</th>
+                            <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase">Stream Source</th>
+                            <th class="px-4 py-3 text-right text-xs font-medium text-gray-500 dark:text-gray-300 uppercase">Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody class="divide-y divide-gray-200 dark:divide-gray-700">
+                        <template x-for="stream in streams" :key="stream.id">
+                            <tr class="bg-white dark:bg-gray-800">
+                                <td class="px-4 py-3 text-sm font-semibold" x-text="stream.label"></td>
+                                <td class="px-4 py-3 text-sm text-gray-600 dark:text-gray-400 font-mono text-xs break-all" x-text="stream.stream_url"></td>
+                                <td class="px-4 py-3 text-right flex justify-end items-center gap-4">
+                                    <button @click="togglePlay(stream.stream_url)" title="Toggle Playback" class="text-xl hover:scale-125 transition-transform" x-text="globalAudioUrl === stream.stream_url ? '⏹️' : '▶️'"></button>
+                                    <button @click="copyToClipboard(stream.stream_url)" title="Copy URL" class="text-xl hover:scale-125 transition-transform">📋</button>
+                                    <button @click="renameStream(stream)" title="Edit Label" class="text-xl hover:scale-125 transition-transform">✏️</button>
+                                    <button @click="startRecording(stream.id)" class="text-green-600 dark:text-green-400 font-bold">Record</button>
+                                    <button @click="deleteStream(stream.id)" class="text-red-600 dark:text-red-400 font-bold">Delete</button>
+                                </td>
                             </tr>
-                        </thead>
-                        <tbody>
-                            <template x-for="stream in streams" :key="stream.id">
-                                <tr class="border-b border-gray-100 dark:border-gray-800">
-                                    <td class="py-3 font-medium" x-text="stream.label"></td>
-                                    <td class="py-3 font-mono text-xs text-gray-400 truncate max-w-xs" x-text="stream.stream_url"></td>
-                                    <td class="py-3 text-right space-x-2">
-                                        <button @click="startRecord(stream.id)" class="px-3 py-1 bg-red-600 text-white rounded text-xs hover:bg-red-700">Rec Now</button>
-                                        <button @click="confirmDelete('stream', stream.id)" class="px-3 py-1 bg-gray-200 dark:bg-gray-700 rounded text-xs hover:bg-gray-300 dark:hover:bg-gray-600">Delete</button>
-                                    </td>
-                                </tr>
-                            </template>
-                        </tbody>
-                    </table>
-                </div>
-            </section>
+                        </template>
+                    </tbody>
+                </table>
+            </div>
         </div>
 
-        <!-- SCHEDULES TAB -->
-        <div x-show="currentTab === 'schedules'">
-            <section class="bg-white dark:bg-darkcard p-6 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700 mb-6">
-                <h2 class="text-lg font-semibold mb-4">Create Schedule</h2>
-                <div class="grid grid-cols-1 md:grid-cols-4 gap-4">
-                    <div class="col-span-1 md:col-span-1">
-                        <label class="block text-xs text-gray-500 mb-1">Target Stream</label>
-                        <select x-model="newSchedule.stream_id" class="w-full px-3 py-2 bg-gray-50 dark:bg-gray-800 border border-gray-300 dark:border-gray-600 rounded-lg text-sm">
+        <div x-show="activeTab === 'schedules'" x-cloak>
+            <div class="bg-white dark:bg-gray-800 rounded-lg shadow p-6 mb-6">
+                <h2 class="text-xl font-bold mb-4" x-text="editingScheduleId ? 'Edit Schedule' : 'Create New Schedule'"></h2>
+                <div class="grid grid-cols-1 md:grid-cols-5 gap-4 items-end">
+                    <div>
+                        <label class="block text-sm font-medium mb-1">Target Stream</label>
+                        <select x-model="schedStreamId" class="w-full px-3 py-2 border dark:border-gray-600 rounded-lg bg-gray-50 dark:bg-gray-700">
                             <option value="">Select Stream...</option>
-                            <template x-for="stream in streams" :key="stream.id">
-                                <option :value="stream.id" x-text="stream.label"></option>
+                            <template x-for="s in streams" :key="s.id">
+                                <option :value="s.id" x-text="s.label"></option>
                             </template>
                         </select>
                     </div>
-                    <div class="col-span-1 md:col-span-1">
-                        <label class="block text-xs text-gray-500 mb-1">Cron Expression</label>
-                        <input type="text" x-model="newSchedule.cron_expression" placeholder="e.g. 0 12 * * *" class="w-full px-3 py-2 bg-gray-50 dark:bg-gray-800 border border-gray-300 dark:border-gray-600 rounded-lg text-sm">
-                    </div>
-                    <div class="col-span-1 md:col-span-1">
-                        <label class="block text-xs text-gray-500 mb-1">Duration (Minutes)</label>
-                        <input type="number" x-model="newSchedule.duration_minutes" placeholder="120" class="w-full px-3 py-2 bg-gray-50 dark:bg-gray-800 border border-gray-300 dark:border-gray-600 rounded-lg text-sm">
-                    </div>
-                    <div class="col-span-1 md:col-span-1 flex items-end">
-                        <button @click="saveSchedule()" class="w-full px-4 py-2 bg-blue-600 text-white rounded-lg text-sm hover:bg-blue-700">Add Job</button>
-                    </div>
-                </div>
-            </section>
-
-            <section class="bg-white dark:bg-darkcard p-6 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700">
-                <h2 class="text-lg font-semibold mb-4">Active Schedules</h2>
-                <div class="overflow-x-auto">
-                    <table class="w-full text-left text-sm">
-                        <thead>
-                            <tr class="border-b border-gray-200 dark:border-gray-700 text-gray-500 dark:text-gray-400">
-                                <th class="py-2">Stream Label</th>
-                                <th class="py-2">Cron Pattern</th>
-                                <th class="py-2">Duration</th>
-                                <th class="py-2 text-right">Actions</th>
-                            </tr>
-                        </thead>
-                        <tbody>
-                            <template x-for="sched in schedules" :key="sched.id">
-                                <tr class="border-b border-gray-100 dark:border-gray-800">
-                                    <td class="py-3 font-medium" x-text="sched.label"></td>
-                                    <td class="py-3 font-mono text-xs text-gray-500 dark:text-gray-400" x-text="sched.cron_expression"></td>
-                                    <td class="py-3 text-xs" x-text="sched.duration_minutes + ' min'"></td>
-                                    <td class="py-3 text-right space-x-2">
-                                        <button @click="confirmDelete('schedule', sched.id)" class="px-3 py-1 bg-red-600 text-white rounded text-xs hover:bg-red-700">Delete</button>
-                                    </td>
-                                </tr>
-                            </template>
-                            <tr x-show="schedules.length === 0">
-                                <td colspan="4" class="py-4 text-center text-gray-500 text-xs">No active schedules.</td>
-                            </tr>
-                        </tbody>
-                    </table>
-                </div>
-            </section>
-        </div>
-
-        <!-- SETTINGS TAB -->
-        <div x-show="currentTab === 'settings'">
-            <section class="bg-white dark:bg-darkcard p-6 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700 max-w-2xl mx-auto">
-                <h2 class="text-lg font-semibold mb-6">System Configuration</h2>
-                
-                <div class="space-y-5">
                     <div>
-                        <label class="block text-sm font-medium mb-1">Recording Save Directory</label>
-                        <p class="text-xs text-gray-500 mb-2">The default internal container path where .mp3 files are saved.</p>
-                        <input type="text" x-model="settings.recordings_dir" class="w-full px-4 py-2 bg-gray-50 dark:bg-gray-800 border border-gray-300 dark:border-gray-600 rounded-lg text-sm">
+                        <label class="block text-sm font-medium mb-1">Description (Optional)</label>
+                        <input type="text" x-model="schedDescription" placeholder="e.g., Morning Show" class="w-full px-3 py-2 border dark:border-gray-600 rounded-lg bg-gray-50 dark:bg-gray-700">
                     </div>
-                    
-                    <div class="pt-4 border-t border-gray-100 dark:border-gray-700">
-                        <label class="block text-sm font-medium mb-1">Telegram Bot Token</label>
-                        <input type="password" x-model="settings.telegram_bot_token" class="w-full px-4 py-2 bg-gray-50 dark:bg-gray-800 border border-gray-300 dark:border-gray-600 rounded-lg text-sm">
-                    </div>
-                    
                     <div>
-                        <label class="block text-sm font-medium mb-1">Telegram Chat ID</label>
-                        <input type="text" x-model="settings.telegram_chat_id" class="w-full px-4 py-2 bg-gray-50 dark:bg-gray-800 border border-gray-300 dark:border-gray-600 rounded-lg text-sm">
+                        <label class="block text-sm font-medium mb-1">Start Date & Time</label>
+                        <input type="datetime-local" x-model="startTime" class="w-full px-3 py-2 border dark:border-gray-600 rounded-lg bg-gray-50 dark:bg-gray-700">
                     </div>
-                    
-                    <div class="pt-4 text-right">
-                        <button @click="saveSettings()" class="px-6 py-2 bg-blue-600 text-white rounded-lg text-sm hover:bg-blue-700">Save Configuration</button>
-                        <span x-show="settingsSaved" class="ml-3 text-sm text-green-500 font-medium transition-opacity">Saved!</span>
+                    <div>
+                        <label class="block text-sm font-medium mb-1">End Date & Time</label>
+                        <input type="datetime-local" x-model="endTime" class="w-full px-3 py-2 border dark:border-gray-600 rounded-lg bg-gray-50 dark:bg-gray-700">
+                    </div>
+                    <div class="flex gap-2">
+                        <button @click="saveSchedule()" class="px-4 py-2 bg-blue-600 text-white font-semibold rounded-lg hover:bg-blue-700 w-full" x-text="editingScheduleId ? 'Update' : 'Schedule'"></button>
+                        <template x-if="editingScheduleId">
+                            <button @click="resetScheduleForm()" class="px-4 py-2 bg-gray-500 text-white font-semibold rounded-lg w-full">Cancel</button>
+                        </template>
                     </div>
                 </div>
-            </section>
-        </div>
+            </div>
 
-    </div>
-
-    <!-- Sticky Audio Player -->
-    <div x-show="currentTrack" class="fixed bottom-0 left-0 right-0 bg-white dark:bg-gray-900 border-t border-gray-200 dark:border-gray-800 p-4 shadow-xl flex items-center justify-between z-40">
-        <div class="w-1/4">
-            <div class="text-sm font-semibold truncate" x-text="currentTrack"></div>
-        </div>
-        <audio x-ref="audioPlayer" controls class="w-2/4"></audio>
-        <div class="w-1/4 text-right">
-            <button @click="currentTrack = null; $refs.audioPlayer.pause()" class="text-xs text-gray-400">Close</button>
-        </div>
-    </div>
-
-    <!-- Confirmation Modal -->
-    <div x-show="modalOpen" class="fixed inset-0 bg-black/60 flex items-center justify-center z-50">
-        <div class="bg-white dark:bg-darkcard p-6 rounded-xl max-w-sm w-full mx-4 shadow-2xl border border-gray-200 dark:border-gray-700">
-            <h3 class="font-bold text-lg mb-2">Confirm Action</h3>
-            <p class="text-sm text-gray-500 dark:text-gray-400 mb-6">Are you sure you want to permanently delete this item?</p>
-            <div class="flex justify-end gap-3">
-                <button @click="modalOpen = false" class="px-4 py-2 rounded-lg bg-gray-200 dark:bg-gray-700 text-sm hover:bg-gray-300 dark:hover:bg-gray-600">Cancel</button>
-                <button @click="executeDelete()" class="px-4 py-2 rounded-lg bg-red-600 text-white text-sm font-semibold hover:bg-red-700">Delete</button>
+            <div class="bg-white dark:bg-gray-800 rounded-lg shadow overflow-hidden">
+                <table class="min-w-full divide-y divide-gray-200 dark:divide-gray-700">
+                    <thead class="bg-gray-100 dark:bg-gray-700">
+                        <tr>
+                            <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase">Stream</th>
+                            <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase">Description</th>
+                            <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase">Start Time</th>
+                            <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase">End Time</th>
+                            <th class="px-4 py-3 text-right text-xs font-medium text-gray-500 dark:text-gray-300 uppercase">Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody class="divide-y divide-gray-200 dark:divide-gray-700">
+                        <template x-for="sched in schedules" :key="sched.id">
+                            <tr class="bg-white dark:bg-gray-800">
+                                <td class="px-4 py-3 text-sm font-semibold" x-text="sched.stream_label || 'Unknown'"></td>
+                                <td class="px-4 py-3 text-sm" x-text="sched.description || '-'"></td>
+                                <td class="px-4 py-3 text-sm" x-text="sched.start_time ? new Date(sched.start_time).toLocaleString() : 'N/A'"></td>
+                                <td class="px-4 py-3 text-sm" x-text="sched.end_time ? new Date(sched.end_time).toLocaleString() : 'N/A'"></td>
+                                <td class="px-4 py-3 text-right space-x-3">
+                                    <button @click="editSchedule(sched)" class="text-blue-600 dark:text-blue-400 font-semibold">Edit</button>
+                                    <button @click="deleteSchedule(sched.id)" class="text-red-600 dark:text-red-400 font-semibold">Delete</button>
+                                </td>
+                            </tr>
+                        </template>
+                    </tbody>
+                </table>
             </div>
         </div>
+
+        <div x-show="activeTab === 'settings'" x-cloak class="space-y-6">
+            
+            <div class="bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-lg shadow p-6 flex flex-col sm:flex-row justify-between items-center gap-4">
+                <div>
+                    <h3 class="font-bold text-xl text-blue-800 dark:text-blue-300">Save Configuration</h3>
+                    <p class="text-sm text-blue-600 dark:text-blue-400">Remember to save your settings to apply changes globally across the engine.</p>
+                </div>
+                <button @click="saveSettings()" class="px-8 py-3 bg-blue-600 text-white font-bold rounded-lg hover:bg-blue-700 shadow-md text-lg transition-transform hover:scale-105 w-full sm:w-auto whitespace-nowrap">
+                    Save All Settings
+                </button>
+            </div>
+
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-6 items-start">
+                
+                <div class="space-y-6">
+                    <div class="bg-white dark:bg-gray-800 rounded-lg shadow p-6">
+                        <h2 class="text-xl font-bold mb-4 border-b dark:border-gray-700 pb-2">General Engine Settings</h2>
+                        <div class="space-y-4">
+                            <div>
+                                <label class="block text-sm font-medium mb-1">Recordings Directory</label>
+                                <input type="text" x-model="settings.recordings_dir" class="w-full px-3 py-2 border dark:border-gray-600 bg-gray-50 dark:bg-gray-700 rounded-lg">
+                                <p class="text-xs text-gray-500 dark:text-gray-400 mt-1">The internal folder path where MP3 files are written.</p>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="bg-white dark:bg-gray-800 rounded-lg shadow p-6 border-t-4 border-red-600">
+                        <h2 class="text-xl font-bold mb-2 text-red-600 flex items-center gap-2">⚠️ Danger Zone</h2>
+                        <p class="text-sm text-gray-600 dark:text-gray-400 mb-4">
+                            Need to start from scratch? This will wipe your database tables (streams, schedules, settings, and recording histories). 
+                            Your physical audio files will remain safe on your drive, but the application engine will be factory reset.
+                        </p>
+                        <button @click="purgeDatabase()" class="px-6 py-2 bg-red-600 text-white font-bold rounded-lg hover:bg-red-700 transition-colors shadow-sm">
+                            Factory Reset & Purge Data
+                        </button>
+                    </div>
+                </div>
+
+                <div class="bg-white dark:bg-gray-800 rounded-lg shadow p-6">
+                    <h2 class="text-xl font-bold mb-4 border-b dark:border-gray-700 pb-2">Telegram Integration</h2>
+                    
+                    <div class="space-y-4 mb-6">
+                        <div>
+                            <label class="block text-sm font-medium mb-1">Bot Token</label>
+                            <div class="relative flex items-center">
+                                <input :type="showToken ? 'text' : 'password'" x-model="settings.telegram_token" placeholder="123456789:ABCdef..." class="w-full px-3 py-2 pr-10 border dark:border-gray-600 bg-gray-50 dark:bg-gray-700 rounded-lg">
+                                <button type="button" @click="showToken = !showToken" class="absolute right-2 px-2 py-1 text-gray-500 hover:text-gray-700 dark:hover:text-gray-300 transition-colors">
+                                    <span x-text="showToken ? '🙈' : '👁️'"></span>
+                                </button>
+                            </div>
+                        </div>
+                        <div>
+                            <label class="block text-sm font-medium mb-1">Chat ID</label>
+                            <input type="text" x-model="settings.telegram_chat_id" placeholder="-1001234567890" class="w-full px-3 py-2 border dark:border-gray-600 bg-gray-50 dark:bg-gray-700 rounded-lg">
+                        </div>
+                    </div>
+
+                    <h3 class="font-bold mb-3 text-sm text-gray-500 dark:text-gray-400 uppercase tracking-wide">Alert Me When...</h3>
+                    <p class="text-xs text-gray-500 mb-3">(Tip: You can edit the exact text of these messages by editing the <code>app/messages.json</code> file on your computer.)</p>
+                    <div class="space-y-3">
+                        <div class="flex items-center justify-between bg-gray-50 dark:bg-gray-700 p-3 rounded-lg border dark:border-gray-600">
+                            <label class="flex items-center gap-3 cursor-pointer">
+                                <input type="checkbox" x-model="settings.notif_manual_start" class="w-5 h-5 text-blue-600 rounded bg-white dark:bg-gray-800 border-gray-300 dark:border-gray-600">
+                                <span class="text-sm font-semibold">I manually start a recording</span>
+                            </label>
+                            <button @click="testTelegram('notif_manual_start')" class="px-3 py-1 bg-gray-200 dark:bg-gray-600 text-xs font-bold rounded hover:bg-gray-300 dark:hover:bg-gray-500">TEST</button>
+                        </div>
+                        
+                        <div class="flex items-center justify-between bg-gray-50 dark:bg-gray-700 p-3 rounded-lg border dark:border-gray-600">
+                            <label class="flex items-center gap-3 cursor-pointer">
+                                <input type="checkbox" x-model="settings.notif_manual_stop" class="w-5 h-5 text-blue-600 rounded bg-white dark:bg-gray-800 border-gray-300 dark:border-gray-600">
+                                <span class="text-sm font-semibold">I manually stop a recording</span>
+                            </label>
+                            <button @click="testTelegram('notif_manual_stop')" class="px-3 py-1 bg-gray-200 dark:bg-gray-600 text-xs font-bold rounded hover:bg-gray-300 dark:hover:bg-gray-500">TEST</button>
+                        </div>
+
+                        <div class="flex items-center justify-between bg-gray-50 dark:bg-gray-700 p-3 rounded-lg border dark:border-gray-600">
+                            <label class="flex items-center gap-3 cursor-pointer">
+                                <input type="checkbox" x-model="settings.notif_sched_start" class="w-5 h-5 text-blue-600 rounded bg-white dark:bg-gray-800 border-gray-300 dark:border-gray-600">
+                                <span class="text-sm font-semibold">A scheduled recording starts</span>
+                            </label>
+                            <button @click="testTelegram('notif_sched_start')" class="px-3 py-1 bg-gray-200 dark:bg-gray-600 text-xs font-bold rounded hover:bg-gray-300 dark:hover:bg-gray-500">TEST</button>
+                        </div>
+
+                        <div class="flex items-center justify-between bg-gray-50 dark:bg-gray-700 p-3 rounded-lg border dark:border-gray-600">
+                            <label class="flex items-center gap-3 cursor-pointer">
+                                <input type="checkbox" x-model="settings.notif_sched_stop" class="w-5 h-5 text-blue-600 rounded bg-white dark:bg-gray-800 border-gray-300 dark:border-gray-600">
+                                <span class="text-sm font-semibold">A scheduled recording finishes</span>
+                            </label>
+                            <button @click="testTelegram('notif_sched_stop')" class="px-3 py-1 bg-gray-200 dark:bg-gray-600 text-xs font-bold rounded hover:bg-gray-300 dark:hover:bg-gray-500">TEST</button>
+                        </div>
+
+                        <div class="flex items-center justify-between bg-gray-50 dark:bg-gray-700 p-3 rounded-lg border dark:border-gray-600">
+                            <label class="flex items-center gap-3 cursor-pointer">
+                                <input type="checkbox" x-model="settings.notif_stream_connected" class="w-5 h-5 text-blue-600 rounded bg-white dark:bg-gray-800 border-gray-300 dark:border-gray-600">
+                                <span class="text-sm font-semibold">The audio stream connects</span>
+                            </label>
+                            <button @click="testTelegram('notif_stream_connected')" class="px-3 py-1 bg-gray-200 dark:bg-gray-600 text-xs font-bold rounded hover:bg-gray-300 dark:hover:bg-gray-500">TEST</button>
+                        </div>
+
+                        <div class="flex items-center justify-between bg-gray-50 dark:bg-gray-700 p-3 rounded-lg border dark:border-gray-600">
+                            <label class="flex items-center gap-3 cursor-pointer">
+                                <input type="checkbox" x-model="settings.notif_stream_disconnected" class="w-5 h-5 text-blue-600 rounded bg-white dark:bg-gray-800 border-gray-300 dark:border-gray-600">
+                                <span class="text-sm font-semibold">The audio stream drops</span>
+                            </label>
+                            <button @click="testTelegram('notif_stream_disconnected')" class="px-3 py-1 bg-gray-200 dark:bg-gray-600 text-xs font-bold rounded hover:bg-gray-300 dark:hover:bg-gray-500">TEST</button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            
+        </div>
+
+        <div x-show="activeTab === 'logs'" x-cloak>
+            <div class="bg-gray-900 rounded-lg shadow p-4 h-[600px] flex flex-col">
+                <div class="flex justify-between items-center mb-2">
+                    <h2 class="text-lg font-bold text-gray-100">Application Event Logs</h2>
+                    <button @click="fetchLogs()" class="px-3 py-1 bg-gray-700 text-gray-200 rounded hover:bg-gray-600 text-sm">Refresh</button>
+                </div>
+                <pre class="flex-1 overflow-y-auto text-green-400 font-mono text-sm p-4 bg-black rounded whitespace-pre-wrap" x-text="appLogs"></pre>
+            </div>
+        </div>
+
+    </div>
+
+    <div class="fixed bottom-0 w-full bg-white dark:bg-gray-800 border-t dark:border-gray-700 p-3 shadow-[0_-4px_6px_-1px_rgba(0,0,0,0.1)] flex justify-center z-50">
+        <audio id="global-audio-player" controls preload="none" :src="globalAudioUrl" class="w-full max-w-4xl h-10 outline-none"></audio>
     </div>
 
     <script>
-        function app() {
-            return {
-                darkMode: localStorage.getItem('theme') === 'dark',
-                currentTab: 'dashboard',
-                
-                probeUrl: '',
-                streamLabel: '',
-                discoveredUrl: null,
-                loading: false,
-                
-                streams: [],
-                recordings: [],
-                schedules: [],
-                settings: { recordings_dir: '/recordings', telegram_bot_token: '', telegram_chat_id: '' },
-                
-                newSchedule: { stream_id: '', cron_expression: '', duration_minutes: '' },
-                settingsSaved: false,
-                
-                currentTrack: null,
-                modalOpen: false,
-                deleteTarget: null,
+    function appData() {
+        return {
+            activeTab: 'dashboard',
+            darkMode: localStorage.getItem('darkMode') === 'true',
+            showToken: false,
+            streams: [], recordings: [], schedules: [],
+            probeUrl: '', discoveredUrls: [], selectedUrl: null, streamLabel: '',
+            schedStreamId: '', schedDescription: '', startTime: '', endTime: '', editingScheduleId: null,
+            globalAudioUrl: null,
+            settings: { 
+                recordings_dir: '/recordings', telegram_token: '', telegram_chat_id: '',
+                notif_manual_start: false, notif_manual_stop: false, notif_sched_start: false,
+                notif_sched_stop: false, notif_stream_connected: false, notif_stream_disconnected: false
+            },
+            appLogs: 'Loading logs...',
+            isProbing: false,
 
-                init() {
-                    this.loadData();
-                    this.loadSchedules();
-                    this.loadSettings();
-                    setInterval(() => this.loadData(), 5000); // Polling for dashboard
-                },
-                toggleTheme() {
-                    this.darkMode = !this.darkMode;
-                    localStorage.setItem('theme', this.darkMode ? 'dark' : 'light');
-                },
-                async loadData() {
-                    const [resStreams, resRecs] = await Promise.all([
-                        fetch('/api/streams'),
-                        fetch('/api/recordings')
-                    ]);
-                    this.streams = await resStreams.json();
-                    this.recordings = await resRecs.json();
-                },
-                async loadSchedules() {
-                    const res = await fetch('/api/schedules');
-                    this.schedules = await res.json();
-                },
-                async loadSettings() {
-                    const res = await fetch('/api/settings');
-                    this.settings = await res.json();
-                },
-                
-                async probeStream() {
-                    this.loading = true;
-                    this.discoveredUrl = null;
-                    try {
-                        const res = await fetch('/api/streams/probe', {
-                            method: 'POST',
-                            headers: { 'Content-Type': 'application/json' },
-                            body: JSON.stringify({ url: this.probeUrl })
-                        });
-                        const data = await res.json();
-                        if (data.success) this.discoveredUrl = data.stream_url;
-                    } catch (e) {
-                        alert('Failed to extract audio stream from page.');
-                    }
-                    this.loading = false;
-                },
-                async saveStream() {
-                    await fetch('/api/streams', {
-                        method: 'POST',
-                        headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify({
-                            label: this.streamLabel,
-                            page_url: this.probeUrl,
-                            stream_url: this.discoveredUrl
-                        })
-                    });
-                    this.discoveredUrl = null;
-                    this.probeUrl = '';
-                    this.streamLabel = '';
-                    this.loadData();
-                    this.currentTab = 'dashboard';
-                },
-                async startRecord(streamId) {
-                    await fetch('/api/record/start', {
-                        method: 'POST',
-                        headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify({ stream_id: streamId })
-                    });
-                    this.loadData();
-                    this.currentTab = 'dashboard';
-                },
-                async stopRecord(recordingId) {
-                    await fetch(`/api/record/stop/${recordingId}`, { method: 'POST' });
-                    this.loadData();
-                },
-                
-                async saveSchedule() {
-                    if (!this.newSchedule.stream_id || !this.newSchedule.cron_expression || !this.newSchedule.duration_minutes) {
-                        alert('Please fill out all schedule fields.');
-                        return;
-                    }
-                    await fetch('/api/schedules', {
-                        method: 'POST',
-                        headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify(this.newSchedule)
-                    });
-                    this.newSchedule = { stream_id: '', cron_expression: '', duration_minutes: '' };
-                    this.loadSchedules();
-                },
-                
-                async saveSettings() {
-                    await fetch('/api/settings', {
-                        method: 'PUT',
-                        headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify(this.settings)
-                    });
-                    this.settingsSaved = true;
-                    setTimeout(() => this.settingsSaved = false, 3000);
-                },
+            init() {
+                this.fetchStreams(); this.fetchRecordings(); this.fetchSchedules(); this.fetchSettings(); this.fetchLogs();
+                setInterval(() => { 
+                    this.fetchRecordings(); 
+                    if (this.activeTab === 'logs') this.fetchLogs();
+                }, 1000);
+            },
 
-                playAudio(filename) {
-                    this.currentTrack = filename;
-                    const player = this.$refs.audioPlayer;
-                    player.src = `/api/stream/audio/${encodeURIComponent(filename)}`;
-                    player.play();
-                },
-                confirmDelete(type, id) {
-                    this.deleteTarget = { type, id };
-                    this.modalOpen = true;
-                },
-                async executeDelete() {
-                    if (!this.deleteTarget) return;
-                    
-                    let endpoint = '';
-                    if (this.deleteTarget.type === 'stream') endpoint = `/api/streams/${this.deleteTarget.id}`;
-                    if (this.deleteTarget.type === 'recording') endpoint = `/api/recordings/${this.deleteTarget.id}`;
-                    if (this.deleteTarget.type === 'schedule') endpoint = `/api/schedules/${this.deleteTarget.id}`;
-                    
-                    await fetch(endpoint, { method: 'DELETE' });
-                    this.modalOpen = false;
-                    this.deleteTarget = null;
-                    
-                    this.loadData();
-                    if (endpoint.includes('schedules')) this.loadSchedules();
+            toggleDarkMode() { this.darkMode = !this.darkMode; localStorage.setItem('darkMode', this.darkMode); },
+            formatSize(bytes) { return bytes ? (bytes / (1024 * 1024)).toFixed(2) + ' MB' : '0.00 MB'; },
+            formatDuration(seconds) {
+                if (!seconds) return '00:00:00';
+                const h = String(Math.floor(seconds / 3600)).padStart(2, '0');
+                const m = String(Math.floor((seconds % 3600) / 60)).padStart(2, '0');
+                const s = String(Math.floor(seconds % 60)).padStart(2, '0');
+                return `${h}:${m}:${s}`;
+            },
+            copyToClipboard(text) { navigator.clipboard.writeText(text).then(() => alert('URL copied!')); },
+            togglePlay(url) {
+                const player = document.getElementById('global-audio-player');
+                if (this.globalAudioUrl === url && player && !player.paused) {
+                    player.pause(); this.globalAudioUrl = null;
+                } else {
+                    this.globalAudioUrl = url;
+                    setTimeout(() => { document.getElementById('global-audio-player')?.play().catch(e => alert(e.message)); }, 100);
                 }
-            }
+            },
+
+            fetchStreams() { fetch('/api/streams').then(r => r.json()).then(d => this.streams = d); },
+            fetchRecordings() { fetch('/api/recordings').then(r => r.json()).then(d => this.recordings = d); },
+            fetchSchedules() { fetch('/api/schedules').then(r => r.json()).then(d => this.schedules = d); },
+            fetchLogs() { fetch('/api/logs').then(r => r.json()).then(d => this.appLogs = d.logs); },
+
+            fetchSettings() { 
+                fetch('/api/sys_settings?t=' + Date.now()).then(r => r.json()).then(d => { 
+                    Object.assign(this.settings, {
+                        recordings_dir: d.recordings_dir || '/recordings',
+                        telegram_token: d.telegram_token || '',
+                        telegram_chat_id: d.telegram_chat_id || '',
+                        notif_manual_start: d.notif_manual_start === 'true',
+                        notif_manual_stop: d.notif_manual_stop === 'true',
+                        notif_sched_start: d.notif_sched_start === 'true',
+                        notif_sched_stop: d.notif_sched_stop === 'true',
+                        notif_stream_connected: d.notif_stream_connected === 'true',
+                        notif_stream_disconnected: d.notif_stream_disconnected === 'true'
+                    });
+                }); 
+            },
+
+            saveSettings() {
+                const payload = { ...this.settings };
+                payload.notif_manual_start = payload.notif_manual_start ? 'true' : 'false';
+                payload.notif_manual_stop = payload.notif_manual_stop ? 'true' : 'false';
+                payload.notif_sched_start = payload.notif_sched_start ? 'true' : 'false';
+                payload.notif_sched_stop = payload.notif_sched_stop ? 'true' : 'false';
+                payload.notif_stream_connected = payload.notif_stream_connected ? 'true' : 'false';
+                payload.notif_stream_disconnected = payload.notif_stream_disconnected ? 'true' : 'false';
+
+                fetch('/api/sys_settings', {
+                    method: 'POST', 
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify(payload)
+                }).then(r => r.json()).then(d => {
+                    if (d.success) {
+                        alert('Settings saved successfully.');
+                        this.fetchSettings();
+                    } else {
+                        alert('Database Save Error: ' + (d.error || 'Unknown'));
+                    }
+                }).catch(e => alert('Network error while saving: ' + e));
+            },
+
+            testTelegram(type) {
+                if (!this.settings.telegram_token || !this.settings.telegram_chat_id) {
+                    alert("Please save your Telegram Token and Chat ID above before testing.");
+                    return;
+                }
+                fetch('/api/sys_settings/test', {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({ notif_type: type })
+                }).then(r => r.json()).then(d => {
+                    if (d.success) alert("Test notification dispatched! Check Telegram.");
+                    else alert("Failed: " + d.error);
+                }).catch(e => alert("Network error: " + e.message));
+            },
+
+            purgeDatabase() {
+                if (confirm("⚠️ WILL FACTORY RESET ⚠️\nClick OK to proceed.")) {
+                    fetch('/api/purge', { method: 'POST' }).then(r => r.json()).then(d => {
+                        if (d.success) { alert("Purged. Reloading."); window.location.reload(); } 
+                        else alert("Failed: " + d.error);
+                    });
+                }
+            },
+
+            probeStream() {
+                if (!this.probeUrl) return;
+                this.isProbing = true;
+                this.discoveredUrls = [];
+                this.selectedUrl = null;
+                fetch('/api/streams/probe', {
+                    method: 'POST', headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({url: this.probeUrl})
+                }).then(r => r.json()).then(d => {
+                    if (d.success) {
+                        this.discoveredUrls = d.stream_urls || [];
+                        if (this.discoveredUrls.length > 0) this.selectedUrl = this.discoveredUrls[0];
+                        else alert("No streams were detected on this page.");
+                    } else alert(d.error || "Failed to probe stream");
+                }).catch(e => alert("Network error: " + e.message)).finally(() => this.isProbing = false);
+            },
+            saveStream() {
+                if (!this.selectedUrl || !this.streamLabel) return;
+                fetch('/api/streams', {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({stream_url: this.selectedUrl, label: this.streamLabel})
+                }).then(async r => {
+                    if(!r.ok) throw new Error(await r.text());
+                    return r.json();
+                }).then(() => { 
+                    this.fetchStreams(); this.discoveredUrls = []; this.selectedUrl = null; this.streamLabel = ''; this.probeUrl = ''; 
+                }).catch(e => alert("Failed to save stream: " + e));
+            },
+            renameStream(stream) {
+                const newLabel = prompt("Enter new station label:", stream.label);
+                if (newLabel && newLabel !== stream.label) {
+                    fetch(`/api/streams/${stream.id}`, {
+                        method: 'PATCH', headers: {'Content-Type': 'application/json'},
+                        body: JSON.stringify({label: newLabel})
+                    }).then(() => this.fetchStreams());
+                }
+            },
+            
+            // Delete Handlers with Confirmation Prompts
+            deleteStream(id) { 
+                if(confirm("Are you sure you want to permanently delete this stream?")) {
+                    fetch(`/api/streams/${id}`, {method: 'DELETE'}).then(() => this.fetchStreams()); 
+                }
+            },
+            deleteRecording(id) { 
+                if(confirm("Are you sure you want to permanently delete this recording?")) {
+                    fetch(`/api/recordings/${id}`, {method: 'DELETE'}).then(() => this.fetchRecordings()); 
+                }
+            },
+            deleteSchedule(id) { 
+                if(confirm("Are you sure you want to permanently delete this scheduled event?")) {
+                    fetch(`/api/schedules/${id}`, {method: 'DELETE'}).then(() => this.fetchSchedules()); 
+                }
+            },
+
+            startRecording(id) { fetch('/api/record/start', { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({stream_id: parseInt(id, 10)})}).then(() => { this.fetchRecordings(); this.activeTab = 'dashboard'; }); },
+            stopRecording(id) { fetch(`/api/record/stop/${id}`, {method: 'POST'}).then(() => this.fetchRecordings()); },
+
+            saveSchedule() {
+                if (!this.schedStreamId || !this.startTime || !this.endTime) return alert("Fill required fields.");
+                const startDt = new Date(this.startTime);
+                if (startDt < new Date()) return alert("⚠️ Cannot schedule in the past.");
+                const payload = { stream_id: parseInt(this.schedStreamId, 10), description: this.schedDescription.trim(), start_time: startDt.toISOString(), end_time: new Date(this.endTime).toISOString() };
+                const url = this.editingScheduleId ? `/api/schedules/${this.editingScheduleId}` : '/api/schedules';
+                fetch(url, { method: this.editingScheduleId ? 'PATCH' : 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify(payload) })
+                .then(r => r.json()).then((res) => { if(res.success) { this.resetScheduleForm(); this.fetchSchedules(); } else alert(res.error); });
+            },
+            editSchedule(sched) {
+                this.editingScheduleId = sched.id; this.schedStreamId = sched.stream_id; this.schedDescription = sched.description || '';
+                this.startTime = sched.start_time ? sched.start_time.replace(' ', 'T').slice(0, 16) : ''; this.endTime = sched.end_time ? sched.end_time.replace(' ', 'T').slice(0, 16) : '';
+                window.scrollTo({ top: 0, behavior: 'smooth' });
+            },
+            resetScheduleForm() { this.editingScheduleId = null; this.schedStreamId = ''; this.schedDescription = ''; this.startTime = ''; this.endTime = ''; }
         }
+    }
     </script>
 </body>
 </html>
