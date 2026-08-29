@@ -1,0 +1,217 @@
+from fastapi import FastAPI, HTTPException, Request
+from fastapi.staticfiles import StaticFiles
+from fastapi.responses import HTMLResponse, StreamingResponse, FileResponse
+from pydantic import BaseModel
+from contextlib import asynccontextmanager
+import os
+import re
+from pathlib import Path
+from app.database import init_db, recover_interrupted_recordings, get_db, get_setting, set_setting
+from app.scheduler import start_scheduler, sync_scheduled_jobs
+from app.sniffer import sniff_stream_url
+from app.recorder import StreamRecorder, active_recordings
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    init_db()
+    recover_interrupted_recordings()
+    start_scheduler()
+    yield
+
+app = FastAPI(title="Stream Recorder", lifespan=lifespan)
+app.mount("/static", StaticFiles(directory="app/static"), name="static")
+
+# Models
+class ProbeRequest(BaseModel):
+    url: str
+
+class StreamCreate(BaseModel):
+    label: str
+    page_url: str
+    stream_url: str
+
+class ManualRecordRequest(BaseModel):
+    stream_id: int
+    duration_minutes: int | None = None
+
+class ScheduleCreate(BaseModel):
+    stream_id: int
+    cron_expression: str
+    duration_minutes: int
+
+class SettingsUpdate(BaseModel):
+    recordings_dir: str
+    telegram_bot_token: str
+    telegram_chat_id: str
+
+# Streams API
+@app.post("/api/streams/probe")
+async def probe_stream(req: ProbeRequest):
+    try:
+        discovered_url = await sniff_stream_url(req.url)
+        return {"success": True, "stream_url": discovered_url}
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
+@app.get("/api/streams")
+def list_streams():
+    with get_db() as conn:
+        return [dict(row) for row in conn.execute("SELECT * FROM streams ORDER BY id DESC").fetchall()]
+
+@app.post("/api/streams")
+def create_stream(stream: StreamCreate):
+    with get_db() as conn:
+        cursor = conn.cursor()
+        cursor.execute(
+            "INSERT INTO streams (label, page_url, stream_url) VALUES (?, ?, ?)",
+            (stream.label, stream.page_url, stream.stream_url)
+        )
+        conn.commit()
+        return {"id": cursor.lastrowid}
+
+@app.delete("/api/streams/{stream_id}")
+def delete_stream(stream_id: int):
+    with get_db() as conn:
+        conn.execute("DELETE FROM streams WHERE id = ?", (stream_id,))
+        conn.commit()
+    sync_scheduled_jobs()
+    return {"success": True}
+
+# Schedules API
+@app.get("/api/schedules")
+def list_schedules():
+    with get_db() as conn:
+        query = """
+            SELECT s.id, s.cron_expression, s.duration_minutes, s.stream_id, st.label 
+            FROM schedules s 
+            JOIN streams st ON s.stream_id = st.id 
+            ORDER BY s.id DESC
+        """
+        return [dict(row) for row in conn.execute(query).fetchall()]
+
+@app.post("/api/schedules")
+def create_schedule(schedule: ScheduleCreate):
+    with get_db() as conn:
+        cursor = conn.cursor()
+        cursor.execute(
+            "INSERT INTO schedules (stream_id, cron_expression, duration_minutes) VALUES (?, ?, ?)",
+            (schedule.stream_id, schedule.cron_expression, schedule.duration_minutes)
+        )
+        conn.commit()
+    sync_scheduled_jobs()
+    return {"success": True}
+
+@app.delete("/api/schedules/{schedule_id}")
+def delete_schedule(schedule_id: int):
+    with get_db() as conn:
+        conn.execute("DELETE FROM schedules WHERE id = ?", (schedule_id,))
+        conn.commit()
+    sync_scheduled_jobs()
+    return {"success": True}
+
+# Recordings API
+@app.post("/api/record/start")
+async def start_recording(req: ManualRecordRequest):
+    with get_db() as conn:
+        stream = conn.execute("SELECT * FROM streams WHERE id = ?", (req.stream_id,)).fetchone()
+        if not stream:
+            raise HTTPException(status_code=404, detail="Stream not found")
+    
+    recorder = StreamRecorder(stream["id"], stream["label"], stream["stream_url"], req.duration_minutes)
+    await recorder.start()
+    return {"success": True, "recording_id": recorder.db_id}
+
+@app.post("/api/record/stop/{recording_id}")
+async def stop_recording(recording_id: int):
+    if recording_id not in active_recordings:
+        raise HTTPException(status_code=404, detail="Active recording not found")
+    await active_recordings[recording_id].stop()
+    return {"success": True}
+
+@app.get("/api/recordings")
+def list_recordings():
+    with get_db() as conn:
+        return [dict(row) for row in conn.execute("SELECT * FROM recordings ORDER BY id DESC").fetchall()]
+
+@app.delete("/api/recordings/{rec_id}")
+async def delete_recording(rec_id: int):
+    if rec_id in active_recordings:
+        await active_recordings[rec_id].stop()
+
+    with get_db() as conn:
+        rec = conn.execute("SELECT filepath FROM recordings WHERE id = ?", (rec_id,)).fetchone()
+        if rec and Path(rec["filepath"]).exists():
+            try:
+                os.remove(rec["filepath"])
+            except OSError:
+                pass
+        conn.execute("DELETE FROM recordings WHERE id = ?", (rec_id,))
+        conn.commit()
+    return {"success": True}
+
+@app.get("/api/stream/audio/{filename}")
+def stream_audio(filename: str, request: Request):
+    safe_filename = os.path.basename(filename)
+    rec_dir = Path(get_setting("recordings_dir", "/recordings"))
+    file_path = rec_dir / safe_filename
+    
+    if not file_path.exists():
+        raise HTTPException(status_code=404, detail="File not found")
+
+    file_size = file_path.stat().st_size
+    range_header = request.headers.get("range")
+
+    if range_header:
+        byte_start, byte_end = 0, None
+        match = re.search(r"bytes=(\d+)-(\d*)", range_header)
+        if match:
+            groups = match.groups()
+            byte_start = int(groups[0])
+            if groups[1]:
+                byte_end = int(groups[1])
+
+        if byte_end is None:
+            byte_end = file_size - 1
+        length = byte_end - byte_start + 1
+
+        def iterfile():
+            with open(file_path, "rb") as f:
+                f.seek(byte_start)
+                remaining = length
+                while remaining > 0:
+                    chunk_size = min(64 * 1024, remaining)
+                    data = f.read(chunk_size)
+                    if not data:
+                        break
+                    remaining -= len(data)
+                    yield data
+
+        headers = {
+            "Content-Range": f"bytes {byte_start}-{byte_end}/{file_size}",
+            "Accept-Ranges": "bytes",
+            "Content-Length": str(length),
+            "Content-Type": "audio/mpeg",
+        }
+        return StreamingResponse(iterfile(), status_code=206, headers=headers)
+
+    return StreamingResponse(open(file_path, "rb"), media_type="audio/mpeg")
+
+# Settings API
+@app.get("/api/settings")
+def get_settings():
+    return {
+        "recordings_dir": get_setting("recordings_dir", "/recordings"),
+        "telegram_bot_token": get_setting("telegram_bot_token", ""),
+        "telegram_chat_id": get_setting("telegram_chat_id", "")
+    }
+
+@app.put("/api/settings")
+def update_settings(settings: SettingsUpdate):
+    set_setting("recordings_dir", settings.recordings_dir)
+    set_setting("telegram_bot_token", settings.telegram_bot_token)
+    set_setting("telegram_chat_id", settings.telegram_chat_id)
+    return {"success": True}
+
+@app.get("/", response_class=FileResponse)
+def index():
+    return FileResponse("app/static/index.html")

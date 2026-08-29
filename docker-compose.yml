@@ -1,0 +1,15 @@
+services:
+  stream-recorder:
+    build: .
+    image: stream-recorder:latest
+    container_name: stream_recorder
+    restart: unless-stopped
+    ports:
+      - "8000:8000"
+    environment:
+      - TZ=America/Chicago
+      - CONFIG_DIR=/config
+      - RECORDINGS_DIR=/recordings
+    volumes:
+      - ./config:/config
+      - ./recordings:/recordings
