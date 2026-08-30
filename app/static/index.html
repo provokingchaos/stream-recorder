@@ -340,6 +340,34 @@
                                 </div>
                             </label>
                         </div>
+
+                        <div class="border-t dark:border-gray-700 pt-4">
+                            <label class="block text-sm font-medium mb-2">AI Transcription Model</label>
+                            <div class="flex flex-col sm:flex-row gap-3 items-start sm:items-center">
+                                <select x-model="settings.whisper_model"
+                                    class="w-full sm:w-auto px-3 py-2 border dark:border-gray-600 bg-gray-50 dark:bg-gray-700 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none">
+                                    <option value="tiny.en">Tiny (Fastest, Lowest Accuracy)</option>
+                                    <option value="base.en">Base (Fast, Good Accuracy)</option>
+                                    <option value="small.en">Small (Moderate Speed & Accuracy)</option>
+                                    <option value="medium.en">Medium (Slow, High Accuracy)</option>
+                                    <option value="large-v3">Large-v3 (Very Slow, Best Accuracy)</option>
+                                </select>
+                                <button @click="cacheModel()" :disabled="modelDownloadStatus === 'downloading'"
+                                    class="px-4 py-2 bg-purple-600 text-white font-semibold rounded-lg hover:bg-purple-700 disabled:opacity-50 transition-colors w-full sm:w-auto">
+                                    Force Recache
+                                </button>
+
+                                <span x-show="modelDownloadStatus === 'downloading'"
+                                    class="px-3 py-1.5 bg-yellow-100 text-yellow-800 dark:bg-yellow-900/50 dark:text-yellow-200 text-xs font-bold rounded-full animate-pulse whitespace-nowrap">DOWNLOADING...</span>
+                                <span x-show="modelDownloadStatus === 'downloaded'"
+                                    class="px-3 py-1.5 bg-green-100 text-green-800 dark:bg-green-900/50 dark:text-green-200 text-xs font-bold rounded-full whitespace-nowrap">DOWNLOADED</span>
+                                <span x-show="modelDownloadStatus === 'error'"
+                                    class="px-3 py-1.5 bg-red-100 text-red-800 dark:bg-red-900/50 dark:text-red-200 text-xs font-bold rounded-full whitespace-nowrap">FAILED</span>
+                            </div>
+                            <p class="text-xs text-gray-500 dark:text-gray-400 mt-3">Choose the Whisper AI model size.
+                                Larger models require significantly more memory and may take minutes to download
+                                initially.</p>
+                        </div>
                     </div>
                 </div>
 
@@ -496,11 +524,12 @@
                 probeUrl: '', discoveredUrls: [], selectedUrl: null, streamLabel: '',
                 schedStreamId: '', schedDescription: '', startTime: '', endTime: '', editingScheduleId: null,
                 globalAudioUrl: null,
+                modelDownloadStatus: 'idle',
                 settings: {
                     recordings_dir: '/recordings', telegram_token: '', telegram_chat_id: '',
                     notif_manual_start: false, notif_manual_stop: false, notif_sched_start: false,
                     notif_sched_stop: false, notif_stream_connected: false, notif_stream_disconnected: false,
-                    auto_transcribe: false
+                    auto_transcribe: false, whisper_model: 'base.en'
                 },
                 appLogs: 'Loading logs...',
                 isProbing: false,
@@ -553,7 +582,8 @@
                             notif_sched_stop: d.notif_sched_stop === 'true',
                             notif_stream_connected: d.notif_stream_connected === 'true',
                             notif_stream_disconnected: d.notif_stream_disconnected === 'true',
-                            auto_transcribe: d.auto_transcribe === 'true'
+                            auto_transcribe: d.auto_transcribe === 'true',
+                            whisper_model: d.whisper_model || 'base.en'
                         });
                     });
                 },
@@ -567,6 +597,7 @@
                     payload.notif_stream_connected = payload.notif_stream_connected ? 'true' : 'false';
                     payload.notif_stream_disconnected = payload.notif_stream_disconnected ? 'true' : 'false';
                     payload.auto_transcribe = payload.auto_transcribe ? 'true' : 'false';
+                    payload.whisper_model = payload.whisper_model || 'base.en';
 
                     fetch('/api/sys_settings', {
                         method: 'POST',
@@ -580,6 +611,26 @@
                             alert('Database Save Error: ' + (d.error || 'Unknown'));
                         }
                     }).catch(e => alert('Network error while saving: ' + e));
+                },
+
+                cacheModel() {
+                    this.modelDownloadStatus = 'downloading';
+                    fetch('/api/model/cache', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ model_size: this.settings.whisper_model })
+                    }).then(r => r.json()).then(d => {
+                        if (d.success) {
+                            this.modelDownloadStatus = 'downloaded';
+                            setTimeout(() => { if (this.modelDownloadStatus === 'downloaded') this.modelDownloadStatus = 'idle'; }, 5000);
+                        } else {
+                            this.modelDownloadStatus = 'error';
+                            alert('Model caching failed: ' + d.error);
+                        }
+                    }).catch(e => {
+                        this.modelDownloadStatus = 'error';
+                        alert('Network error: ' + e.message);
+                    });
                 },
 
                 testTelegram(type) {

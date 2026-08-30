@@ -67,11 +67,8 @@ class StreamProbe(BaseModel):
 class ManualRecordRequest(BaseModel):
     stream_id: int
 
-class ScheduleCreateDate(BaseModel):
-    stream_id: int
-    start_time: str
-    end_time: str
-    description: str = ""
+class ModelCacheRequest(BaseModel):
+    model_size: str
 
 def resolve_recording_path(rec: dict) -> Optional[Path]:
     if rec.get("filepath"):
@@ -413,7 +410,8 @@ def get_sys_settings():
         "notif_sched_stop": d.get("notif_sched_stop", "false"),
         "notif_stream_connected": d.get("notif_stream_connected", "false"),
         "notif_stream_disconnected": d.get("notif_stream_disconnected", "false"),
-        "auto_transcribe": d.get("auto_transcribe", "false")
+        "auto_transcribe": d.get("auto_transcribe", "false"),
+        "whisper_model": d.get("whisper_model", "base.en")
     }
 
 @app.post("/api/sys_settings")
@@ -441,6 +439,18 @@ async def test_sys_settings(request: Request):
     }
     send_telegram_notification(payload.get("notif_type", ""), force=True, **mock_data)
     return JSONResponse({"success": True})
+
+@app.post("/api/model/cache")
+async def cache_ai_model(req: ModelCacheRequest):
+    try:
+        from app.transcriber import force_cache_model
+        import asyncio
+        await asyncio.to_thread(force_cache_model, req.model_size)
+        log_event(f"Successfully verified/cached Whisper model: {req.model_size}")
+        return JSONResponse({"success": True})
+    except Exception as e:
+        log_event(f"Model cache failed: {e}")
+        return JSONResponse({"success": False, "error": str(e)}, status_code=500)
 
 @app.post("/api/schedules")
 async def create_schedule(request: Request):

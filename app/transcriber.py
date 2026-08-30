@@ -1,22 +1,33 @@
 import asyncio
 import os
 from faster_whisper import WhisperModel
-from app.database import get_db, log_event
+from app.database import get_db, log_event, get_setting
 
-# Global model instance for lazy loading
+# Global variables for lazy loading and hot-swapping
 _model = None
+_loaded_model_size = None
+
+def force_cache_model(model_size: str):
+    """Forces the huggingface_hub to download and verify the model cache."""
+    from faster_whisper.utils import download_model
+    config_dir = os.getenv("CONFIG_DIR", "/config")
+    model_dir = os.path.join(config_dir, "models")
+    os.makedirs(model_dir, exist_ok=True)
+    download_model(model_size, cache_dir=model_dir)
 
 def _run_transcription(recording_id: int, filepath: str, transcript_path: str):
-    global _model
+    global _model, _loaded_model_size
     try:
-        # Lazy load the model into memory only when needed using INT8 for CPU speed
-        if _model is None:
+        model_size = get_setting("whisper_model", "base.en")
+        
+        # Load or reload the model if the size setting changed
+        if _model is None or _loaded_model_size != model_size:
             config_dir = os.getenv("CONFIG_DIR", "/config")
             model_dir = os.path.join(config_dir, "models")
             os.makedirs(model_dir, exist_ok=True)
-            _model = WhisperModel("base.en", device="cpu", compute_type="int8", download_root=model_dir)
+            _model = WhisperModel(model_size, device="cpu", compute_type="int8", download_root=model_dir)
+            _loaded_model_size = model_size
         
-        # Beam size 5 offers the best balance of speed vs accuracy
         segments, info = _model.transcribe(filepath, beam_size=5)
         
         with open(transcript_path, "w", encoding="utf-8") as f:
@@ -27,7 +38,7 @@ def _run_transcription(recording_id: int, filepath: str, transcript_path: str):
             conn.execute("UPDATE recordings SET transcription_status = 'completed', transcript_path = ? WHERE id = ?", (transcript_path, recording_id))
             conn.commit()
             
-        log_event(f"Transcription completed for recording #{recording_id}")
+        log_event(f"Transcription completed for recording #{recording_id} using {model_size}")
     except Exception as e:
         with get_db() as conn:
             conn.execute("UPDATE recordings SET transcription_status = 'failed' WHERE id = ?", (recording_id,))
