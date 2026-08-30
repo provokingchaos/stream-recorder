@@ -4,23 +4,41 @@
 
 # Stream Recorder
 
-A lightweight, automated stream recording and scheduling platform packaged as a multi-architecture Docker container. Built with FastAPI, SQLite, APScheduler, FFmpeg, and Faster-Whisper, Stream Recorder delivers real-time capture, live telemetry, browser-based management, AI audio transcription, and instant HTML Telegram notifications.
+A lightweight, automated stream recording and scheduling platform packaged as a multi-architecture Docker container. Built with FastAPI, SQLite, APScheduler, FFmpeg, and Faster-Whisper, Stream Recorder delivers real-time capture, live telemetry, browser-based management, AI audio transcription, automated highlight reel generation, and instant HTML Telegram notifications.
 
 ---
 
 ## Features
 
 * **Dynamic AI Audio Transcription:** CPU-optimized, multi-threaded INT8 transcription via `faster-whisper`. Hot-swap between model sizes (Tiny to Large-v3) directly from the UI, force model caching, and generate transcripts automatically or on-demand.
+* **Automated AI Highlight Reels:** Feed the engine a custom prompt (e.g., *"Find every touchdown and interception"*). It uses a local Qwen 1.5B LLM to scan the transcript, locate the timestamps, and utilize FFmpeg to physically slice and merge the audio into a custom highlight `.mp3`.
 * **Advanced Stream Discovery:** Built-in Playwright and yt-dlp sniffer extracts hidden audio URLs (including direct resolution of `.pls` and `.m3u` playlists) directly from station websites.
 * **Automated Scheduling:** AsyncIO APScheduler job engine with strict UTC normalization to ensure accurate execution across time zones.
 * **Accurate Media Telemetry:** Utilizes `ffprobe` to extract true media duration—compensating for HLS rolling buffers—while calculating disk file size growth on the fly.
 * **Responsive Web Dashboard:** A mobile-friendly Alpine.js and Tailwind CSS frontend featuring system theme auto-detection, in-browser playback, fluid data cards, and live download status tracking.
+* **Database-Backed Event Logs:** An integrated X-Ray logging UI helps you diagnose AI decision-making and connection status in real-time.
 * **Structured Filename Convention:** Standardizes recorded files according to the format: `{StreamName}_{Description}_{YYYY-MM-DD_HH-MM-SS}.mp3`.
 * **Asynchronous Telegram Alerts:** Dispatches clean, high-contrast HTML notification cards for recording events and stream health changes without blocking the application event loop.
-* **Self-Healing Library:** Automatically prunes database records if physical audio or transcript files are manually removed from the storage drive.
+* **Self-Healing Library:** Automatically prunes database records if physical audio, transcript, or highlight files are manually removed from the storage drive.
 * **Multi-Architecture Support:** Built for both `linux/amd64` and `linux/arm64` architectures.
 
 ---
+
+## Interface Screenshots
+
+| **Dashboard & Active Recordings** | **Stream Library** |
+| :---: | :---: |
+| ![Stream Recorder Dashboard](https://raw.githubusercontent.com/provokingchaos/stream-recorder/main/assets/1_stream_recorder_dashboard.png) | ![Stream Recorder Library](https://raw.githubusercontent.com/provokingchaos/stream-recorder/main/assets/2_stream_recorder_library.png) |
+| Manage ongoing captures, track AI processing states, and download/play completed files. | Probe URLs, discover live audio feeds, and build your catalog of saved stations. |
+| **Scheduling** | **Advanced Settings** |
+| ![Stream Recorder Schedules](https://raw.githubusercontent.com/provokingchaos/stream-recorder/main/assets/3_stream_recorder_schedules.png) | ![Stream Recorder Settings](https://raw.githubusercontent.com/provokingchaos/stream-recorder/main/assets/4_stream_recorder_settings.png) |
+| Create automated, precision-timed recording jobs for specific stream targets. | Configure AI model sizes, custom extraction prompts, logging levels, and Telegram bot alerts. |
+| **App Logs** | |
+| ![Stream Recorder App Logs](https://raw.githubusercontent.com/provokingchaos/stream-recorder/main/assets/5_stream_recorder_app_logs.png) | |
+| Monitor connection diagnostics and real-time AI "X-Ray" generation logs. | |
+
+---
+
 
 ## Repository Structure
 
@@ -34,6 +52,7 @@ A lightweight, automated stream recording and scheduling platform packaged as a 
 │   ├── recorder.py            # FFmpeg process execution and ffprobe telemetry
 │   ├── scheduler.py           # APScheduler job definitions and UTC handlers
 │   ├── transcriber.py         # Faster-Whisper background AI transcription worker
+│   ├── highlighter.py         # Qwen-1.5B AI highlight extraction & FFmpeg slicing
 │   ├── notifier.py            # Asynchronous HTML Telegram delivery service
 │   ├── sniffer.py             # Playwright and yt-dlp URL extraction engine
 │   ├── messages.json          # Default Telegram message templates
@@ -90,9 +109,21 @@ docker run -d \
 
 ---
 
+## How the AI Highlights Work
+
+The highlight engine leverages a multi-stage offline pipeline:
+1. **Record:** Stream audio is captured and written to `/recordings/file.mp3`.
+2. **Transcribe:** The audio is processed by `faster-whisper`, writing timestamped dialogue blocks into a `.txt` file.
+3. **Analyze:** The transcript is broken into 45-second chunks and fed into `llama-cpp-python` running a **Qwen-1.5B** GGUF model. The AI follows your custom criteria prompt to output a JSON array of targeted start and end timestamps.
+4. **Slice & Merge:** FFmpeg automatically cuts the desired timestamps from the master audio file and merges them into a seamless `_highlight.mp3` file.
+
+*Tip for best results: Because the models run entirely locally and are highly compressed, use very specific, line-by-line instructions in your Settings prompt (e.g., "Scan the transcript line-by-line. Locate every instance where the announcers describe a touchdown.").*
+
+---
+
 ## Telegram Notifications & Settings
 
-Configure application behavior and Telegram alerts directly from the **Settings** view in the web UI. 
+Configure application behavior, AI concurrency, and Telegram alerts directly from the **Settings** view in the web UI. 
 
 ### Supported Settings
 
@@ -100,7 +131,11 @@ Configure application behavior and Telegram alerts directly from the **Settings*
 |---|---|---|
 | `recordings_dir` | Internal container path where media and transcripts are saved | `/recordings` |
 | `auto_transcribe` | Generate a text transcript immediately after a recording finishes | `false` |
+| `auto_highlight` | Generate an AI highlight reel automatically after transcription | `false` |
 | `whisper_model` | AI model size used for audio transcription (tiny.en, base.en, etc.) | `base.en` |
+| `max_concurrent_transcriptions` | Limit simultaneous transcriptions to prevent CPU bottlenecking | `1` |
+| `max_concurrent_highlights` | Limit simultaneous highlight reel processing | `1` |
+| `ai_log_level` | App Logs verbosity for AI engines (INFO, ERROR, DEBUG) | `INFO` |
 | `telegram_token` | Bot token provided by `@BotFather` | `""` |
 | `telegram_chat_id` | Target Channel, Group, or Direct Chat ID | `""` |
 | `notif_sched_start` | Alert when a scheduled recording begins | `false` |
@@ -143,10 +178,13 @@ Message templates reside in `app/messages.json` and are persisted to `/config/me
 | `GET` | `/api/recordings` | List completed and active recordings |
 | `POST` | `/api/record/start` | Start an immediate recording session |
 | `POST` | `/api/record/stop/{id}` | Terminate an active recording process |
-| `POST` | `/api/recordings/{id}/transcribe` | Trigger a manual AI transcription for a completed recording |
+| `POST` | `/api/recordings/{id}/transcribe` | Trigger a manual AI transcription |
+| `POST` | `/api/recordings/{id}/highlight` | Trigger manual AI highlight reel generation |
 | `GET` | `/api/recordings/{id}/play` | Stream a completed recording directly in the browser |
-| `GET` | `/api/recordings/{id}/download` | Download a completed MP3 file |
-| `GET` | `/api/recordings/{id}/transcript` | Download the generated transcription text file |
+| `GET` | `/api/recordings/{id}/download` | Download a completed full MP3 file |
+| `GET` | `/api/recordings/{id}/transcript` | Download the generated transcription `.txt` file |
+| `GET` | `/api/recordings/{id}/highlight/play` | Stream the extracted AI highlight reel in the browser |
+| `GET` | `/api/recordings/{id}/highlight/download` | Download the AI highlight `.mp3` file |
 | `GET` | `/api/schedules` | List upcoming and completed schedule entries |
 | `POST` | `/api/schedules` | Create a new scheduled capture window |
 | `PATCH` | `/api/schedules/{id}` | Modify an existing schedule entry |
@@ -155,6 +193,7 @@ Message templates reside in `app/messages.json` and are persisted to `/config/me
 | `POST` | `/api/sys_settings` | Save application preferences and alert toggles |
 | `POST` | `/api/model/cache` | Force download and cache verification for a specific AI model |
 | `POST` | `/api/purge` | Execute a complete database factory reset |
+| `GET` | `/api/logs` | Fetch real-time system and AI execution logs |
 
 ---
 
@@ -164,9 +203,9 @@ Application state is preserved inside `/config/stream_recorder.db` across contai
 
 * **`streams`**: Stream identifiers, feed URLs, and friendly names.
 * **`schedules`**: Scheduled start/end windows stored in UTC, stream IDs, and descriptions.
-* **`recordings`**: Filepaths, exit statuses, true media duration, disk sizes, and transcription states.
+* **`recordings`**: Filepaths, exit statuses, true media duration, disk sizes, transcription states, and highlight reel generation progress.
 * **`settings`**: Key-value pairs for system options, automation toggles, model parameters, and notification tokens.
-* **`logs`**: Centralized event and execution history.
+* **`logs`**: Centralized event and AI execution history.
 
 ---
 
