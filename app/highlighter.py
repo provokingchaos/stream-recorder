@@ -118,7 +118,9 @@ def _run_highlight(recording_id, audio_path, transcript_path, output_path):
             try:
                 result = response["choices"][0]["message"]["content"]
                 
-                # Robust extraction: isolate everything between the first '[' and last ']'
+                # Force X-Ray logging of the exact AI output
+                log_event(f"Chunk {i+1}/{total_chunks} AI Output: {result}")
+                
                 start_idx = result.find('[')
                 end_idx = result.rfind(']')
                 
@@ -128,10 +130,10 @@ def _run_highlight(recording_id, audio_path, transcript_path, output_path):
                     if isinstance(parsed, list):
                         all_highlights.extend(parsed)
                 else:
-                    log_event(f"No JSON array found in chunk {i} response. Raw AI output: {result}")
+                    log_event(f"No JSON array found in chunk {i+1} response.")
                     
             except Exception as e:
-                log_event(f"Highlight JSON parse error on chunk {i}: {e}. Raw AI output: {result}")
+                log_event(f"Highlight JSON parse error on chunk {i+1}: {e}.")
 
         with get_db() as conn:
             conn.execute("UPDATE recordings SET highlight_progress = 90 WHERE id = ?", (recording_id,))
@@ -192,7 +194,7 @@ def _run_highlight(recording_id, audio_path, transcript_path, output_path):
             with get_db() as conn:
                 conn.execute("UPDATE recordings SET highlight_status = 'completed', highlight_progress = 100, highlight_path = ? WHERE id = ?", (output_path, recording_id))
                 conn.commit()
-            log_event(f"Highlight reel generated for #{recording_id}")
+            log_event(f"Highlight reel generated for #{recording_id} with {len(merged)} segments.")
 
     except Exception as e:
         with get_db() as conn:
