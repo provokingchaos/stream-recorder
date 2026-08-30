@@ -4,7 +4,7 @@ import re
 import datetime
 from pathlib import Path
 from contextlib import asynccontextmanager
-from fastapi import FastAPI, HTTPException, Request
+from fastapi import FastAPI, HTTPException, Request, BackgroundTasks
 from fastapi.staticfiles import StaticFiles
 from fastapi.responses import HTMLResponse, StreamingResponse, FileResponse, JSONResponse
 from pydantic import BaseModel
@@ -505,27 +505,42 @@ async def test_sys_settings(request: Request):
         return JSONResponse({"success": False, "error": "Failed to dispatch test notification."})
 
 @app.post("/api/model/cache")
-async def cache_ai_model(req: ModelCacheRequest):
+async def cache_ai_model(req: ModelCacheRequest, background_tasks: BackgroundTasks):
     try:
         from app.transcriber import force_cache_model
-        import asyncio
-        await asyncio.to_thread(force_cache_model, req.model_size)
-        log_event(f"Successfully verified/cached Whisper model: {req.model_size}")
+        
+        def run_whisper_download():
+            try:
+                log_event(f"Starting background download for Whisper model: {req.model_size}")
+                force_cache_model(req.model_size)
+                log_event(f"Successfully verified/cached Whisper model: {req.model_size}")
+            except Exception as e:
+                log_event(f"Whisper model cache failed: {e}")
+                
+        background_tasks.add_task(run_whisper_download)
         return JSONResponse({"success": True})
     except Exception as e:
-        log_event(f"Model cache failed: {e}")
+        log_event(f"Failed to initiate Whisper cache: {e}")
         return JSONResponse({"success": False, "error": "Failed to cache AI model."}, status_code=500)
 
 @app.post("/api/model/llm/cache")
-async def cache_llm_model(req: LLMCacheRequest):
+async def cache_llm_model(req: LLMCacheRequest, background_tasks: BackgroundTasks):
     try:
         from app.highlighter import force_cache_llm
-        import asyncio
-        await asyncio.to_thread(force_cache_llm, req.model_val)
-        log_event(f"Successfully verified/cached LLM model: {req.model_val.split('|')[1]}")
+        
+        def run_llm_download():
+            try:
+                filename = req.model_val.split('|')[1]
+                log_event(f"Starting background download for LLM model: {filename}")
+                force_cache_llm(req.model_val)
+                log_event(f"Successfully verified/cached LLM model: {filename}")
+            except Exception as e:
+                log_event(f"LLM model cache failed: {e}")
+                
+        background_tasks.add_task(run_llm_download)
         return JSONResponse({"success": True})
     except Exception as e:
-        log_event(f"LLM model cache failed: {e}")
+        log_event(f"Failed to initiate LLM cache: {e}")
         return JSONResponse({"success": False, "error": "Failed to cache LLM model."}, status_code=500)
 
 @app.delete("/api/model/cache")

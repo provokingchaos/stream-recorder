@@ -494,7 +494,8 @@
                                 <span x-show="llmDownloadStatus === 'downloading'"
                                     class="px-3 py-1.5 bg-yellow-100 text-yellow-800 dark:bg-yellow-900/50 dark:text-yellow-200 text-xs font-bold rounded-full animate-pulse whitespace-nowrap">DOWNLOADING...</span>
                                 <span x-show="llmDownloadStatus === 'downloaded'"
-                                    class="px-3 py-1.5 bg-green-100 text-green-800 dark:bg-green-900/50 dark:text-green-200 text-xs font-bold rounded-full whitespace-nowrap">DOWNLOADED</span>
+                                    class="px-3 py-1.5 bg-blue-100 text-blue-800 dark:bg-blue-900/50 dark:text-blue-200 text-xs font-bold rounded-full whitespace-nowrap">TASK
+                                    STARTED (CHECK LOGS)</span>
                                 <span x-show="llmDownloadStatus === 'error'"
                                     class="px-3 py-1.5 bg-red-100 text-red-800 dark:bg-red-900/50 dark:text-red-200 text-xs font-bold rounded-full whitespace-nowrap">FAILED</span>
                             </div>
@@ -522,7 +523,8 @@
                                 <span x-show="modelDownloadStatus === 'downloading'"
                                     class="px-3 py-1.5 bg-yellow-100 text-yellow-800 dark:bg-yellow-900/50 dark:text-yellow-200 text-xs font-bold rounded-full animate-pulse whitespace-nowrap">DOWNLOADING...</span>
                                 <span x-show="modelDownloadStatus === 'downloaded'"
-                                    class="px-3 py-1.5 bg-green-100 text-green-800 dark:bg-green-900/50 dark:text-green-200 text-xs font-bold rounded-full whitespace-nowrap">DOWNLOADED</span>
+                                    class="px-3 py-1.5 bg-blue-100 text-blue-800 dark:bg-blue-900/50 dark:text-blue-200 text-xs font-bold rounded-full whitespace-nowrap">TASK
+                                    STARTED (CHECK LOGS)</span>
                                 <span x-show="modelDownloadStatus === 'error'"
                                     class="px-3 py-1.5 bg-red-100 text-red-800 dark:bg-red-900/50 dark:text-red-200 text-xs font-bold rounded-full whitespace-nowrap">FAILED</span>
                             </div>
@@ -637,8 +639,7 @@
                 </div>
             </div>
 
-            <div
-                class="bg-white dark:bg-gray-800 rounded-lg shadow p-4 sm:p-6 border border-gray-200 dark:border-gray-700">
+            <div class="bg-white dark:bg-gray-800 rounded-lg shadow p-4 sm:p-6 border-t-4 border-red-600">
                 <h2 class="text-xl font-bold mb-2 flex items-center gap-2">🧹 Storage & Cache</h2>
                 <p class="text-sm text-gray-600 dark:text-gray-400 mb-5">
                     Testing multiple AI model sizes can quickly consume gigabytes of disk space. Wipe the model cache to
@@ -824,7 +825,7 @@
                     }).then(r => r.json()).then(d => {
                         if (d.success) {
                             this.modelDownloadStatus = 'downloaded';
-                            setTimeout(() => { if (this.modelDownloadStatus === 'downloaded') this.modelDownloadStatus = 'idle'; }, 5000);
+                            setTimeout(() => { if (this.modelDownloadStatus === 'downloaded') this.modelDownloadStatus = 'idle'; }, 8000);
                         } else {
                             this.modelDownloadStatus = 'error';
                             alert('Model caching failed: ' + d.error);
@@ -844,7 +845,7 @@
                     }).then(r => r.json()).then(d => {
                         if (d.success) {
                             this.llmDownloadStatus = 'downloaded';
-                            setTimeout(() => { if (this.llmDownloadStatus === 'downloaded') this.llmDownloadStatus = 'idle'; }, 5000);
+                            setTimeout(() => { if (this.llmDownloadStatus === 'downloaded') this.llmDownloadStatus = 'idle'; }, 8000);
                         } else {
                             this.llmDownloadStatus = 'error';
                             alert('LLM caching failed: ' + d.error);
