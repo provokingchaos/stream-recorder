@@ -3,7 +3,7 @@
 
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <title>Stream Recorder Engine</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <script defer src="https://cdn.jsdelivr.net/npm/alpinejs@3.13.3/dist/cdn.min.js"></script>
@@ -11,57 +11,58 @@
 </head>
 
 <body class="bg-gray-50 dark:bg-gray-900 text-gray-900 dark:text-gray-100 font-sans pb-24 transition-colors">
-    <div class="max-w-6xl mx-auto p-6">
+    <div class="max-w-6xl mx-auto p-4 sm:p-6">
 
         <div class="flex justify-between items-center mb-6">
-            <h1 class="text-3xl font-bold text-gray-800 dark:text-white">Stream Recorder Engine</h1>
+            <h1 class="text-2xl sm:text-3xl font-bold text-gray-800 dark:text-white">Stream Recorder Engine</h1>
             <button @click="toggleDarkMode"
-                class="p-2 bg-gray-200 dark:bg-gray-700 rounded-lg text-lg hover:scale-110 transition-transform">
+                class="p-2 bg-gray-200 dark:bg-gray-700 rounded-lg text-lg hover:scale-110 transition-transform focus:outline-none">
                 <span x-text="darkMode ? '☀️' : '🌙'"></span>
             </button>
         </div>
 
-        <div class="flex space-x-4 mb-6 border-b border-gray-300 dark:border-gray-700 pb-2 overflow-x-auto">
+        <div
+            class="flex space-x-4 mb-6 border-b border-gray-300 dark:border-gray-700 pb-2 overflow-x-auto scrollbar-hide">
             <button @click="activeTab = 'dashboard'"
                 :class="activeTab === 'dashboard' ? 'border-b-2 border-blue-600 text-blue-600 dark:text-blue-400' : 'text-gray-500 dark:text-gray-400'"
-                class="px-4 py-2 font-semibold whitespace-nowrap">Dashboard</button>
+                class="px-2 sm:px-4 py-2 font-semibold whitespace-nowrap focus:outline-none">Dashboard</button>
             <button @click="activeTab = 'library'"
                 :class="activeTab === 'library' ? 'border-b-2 border-blue-600 text-blue-600 dark:text-blue-400' : 'text-gray-500 dark:text-gray-400'"
-                class="px-4 py-2 font-semibold whitespace-nowrap">Library</button>
+                class="px-2 sm:px-4 py-2 font-semibold whitespace-nowrap focus:outline-none">Library</button>
             <button @click="activeTab = 'schedules'"
                 :class="activeTab === 'schedules' ? 'border-b-2 border-blue-600 text-blue-600 dark:text-blue-400' : 'text-gray-500 dark:text-gray-400'"
-                class="px-4 py-2 font-semibold whitespace-nowrap">Schedules</button>
+                class="px-2 sm:px-4 py-2 font-semibold whitespace-nowrap focus:outline-none">Schedules</button>
             <button @click="activeTab = 'settings'"
                 :class="activeTab === 'settings' ? 'border-b-2 border-blue-600 text-blue-600 dark:text-blue-400' : 'text-gray-500 dark:text-gray-400'"
-                class="px-4 py-2 font-semibold whitespace-nowrap">Settings</button>
+                class="px-2 sm:px-4 py-2 font-semibold whitespace-nowrap focus:outline-none">Settings</button>
             <button @click="activeTab = 'logs'"
                 :class="activeTab === 'logs' ? 'border-b-2 border-blue-600 text-blue-600 dark:text-blue-400' : 'text-gray-500 dark:text-gray-400'"
-                class="px-4 py-2 font-semibold whitespace-nowrap">App Logs</button>
+                class="px-2 sm:px-4 py-2 font-semibold whitespace-nowrap focus:outline-none">App Logs</button>
         </div>
 
         <div x-show="activeTab === 'dashboard'" x-cloak>
             <h2 class="text-xl font-bold mb-4">Live Recordings & History</h2>
-            <div class="bg-white dark:bg-gray-800 rounded-lg shadow overflow-hidden">
+            <div class="bg-white dark:bg-gray-800 rounded-lg shadow overflow-x-auto">
                 <table class="min-w-full divide-y divide-gray-200 dark:divide-gray-700">
                     <thead class="bg-gray-100 dark:bg-gray-700">
                         <tr>
                             <th
-                                class="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase">
+                                class="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase whitespace-nowrap">
                                 Stream</th>
                             <th
-                                class="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase">
+                                class="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase whitespace-nowrap">
                                 File Name</th>
                             <th
-                                class="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase">
+                                class="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase whitespace-nowrap">
                                 Status</th>
                             <th
-                                class="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase">
+                                class="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase whitespace-nowrap">
                                 Size (MB)</th>
                             <th
-                                class="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase">
+                                class="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase whitespace-nowrap">
                                 Duration</th>
                             <th
-                                class="px-4 py-3 text-right text-xs font-medium text-gray-500 dark:text-gray-300 uppercase">
+                                class="px-4 py-3 text-right text-xs font-medium text-gray-500 dark:text-gray-300 uppercase whitespace-nowrap">
                                 Actions</th>
                         </tr>
                     </thead>
@@ -69,20 +70,21 @@
                         <template x-for="rec in recordings" :key="rec.id">
                             <tr
                                 :class="rec.status === 'recording' ? 'bg-red-50 dark:bg-red-900/20' : 'bg-white dark:bg-gray-800'">
-                                <td class="px-4 py-3 text-sm font-semibold"
+                                <td class="px-4 py-3 text-sm font-semibold whitespace-nowrap"
                                     x-text="rec.stream_label || (rec.filename ? rec.filename.split('_')[0] : 'Unknown')">
                                 </td>
-                                <td class="px-4 py-3 text-xs font-mono text-gray-500 dark:text-gray-400 break-all"
+                                <td class="px-4 py-3 text-xs font-mono text-gray-500 dark:text-gray-400 whitespace-nowrap"
                                     x-text="rec.filename || 'N/A'"></td>
-                                <td class="px-4 py-3 text-sm">
+                                <td class="px-4 py-3 text-sm whitespace-nowrap">
                                     <span class="px-2 py-1 text-xs font-semibold rounded-full"
                                         :class="rec.status === 'recording' ? 'bg-red-200 text-red-800 dark:bg-red-800 dark:text-red-200' : (rec.status === 'completed' ? 'bg-green-200 text-green-800 dark:bg-green-800 dark:text-green-200' : 'bg-gray-200 text-gray-800 dark:bg-gray-600 dark:text-gray-200')"
                                         x-text="rec.status.toUpperCase()"></span>
                                 </td>
-                                <td class="px-4 py-3 text-sm font-mono" x-text="formatSize(rec.file_size_bytes)"></td>
-                                <td class="px-4 py-3 text-sm font-mono" x-text="formatDuration(rec.duration_seconds)">
-                                </td>
-                                <td class="px-4 py-3 text-right flex justify-end items-center gap-3">
+                                <td class="px-4 py-3 text-sm font-mono whitespace-nowrap"
+                                    x-text="formatSize(rec.file_size_bytes)"></td>
+                                <td class="px-4 py-3 text-sm font-mono whitespace-nowrap"
+                                    x-text="formatDuration(rec.duration_seconds)"></td>
+                                <td class="px-4 py-3 text-right flex justify-end items-center gap-3 whitespace-nowrap">
                                     <template x-if="rec.status === 'completed'">
                                         <div class="flex items-center gap-3">
                                             <button @click="togglePlay(`/api/recordings/${rec.id}/play`)"
@@ -109,13 +111,13 @@
         </div>
 
         <div x-show="activeTab === 'library'" x-cloak>
-            <div class="bg-white dark:bg-gray-800 rounded-lg shadow p-6 mb-6">
+            <div class="bg-white dark:bg-gray-800 rounded-lg shadow p-4 sm:p-6 mb-6">
                 <h2 class="text-xl font-bold mb-4">Discover Stream URL</h2>
-                <div class="flex gap-4 mb-4">
+                <div class="flex flex-col sm:flex-row gap-4 mb-4">
                     <input type="text" x-model="probeUrl" placeholder="https://station-website.com/"
-                        class="flex-1 px-4 py-2 border dark:border-gray-600 rounded-lg bg-gray-50 dark:bg-gray-700">
+                        class="flex-1 px-4 py-2 border dark:border-gray-600 rounded-lg bg-gray-50 dark:bg-gray-700 w-full">
                     <button @click="probeStream()" :disabled="isProbing || !probeUrl"
-                        class="px-6 py-2 bg-blue-600 text-white font-semibold rounded-lg hover:bg-blue-700 disabled:opacity-50 w-32">
+                        class="px-6 py-2 bg-blue-600 text-white font-semibold rounded-lg hover:bg-blue-700 disabled:opacity-50 w-full sm:w-32">
                         <span x-text="isProbing ? 'Probing' : 'Probe'"></span>
                     </button>
                 </div>
@@ -136,39 +138,40 @@
                                 </label>
                             </template>
                         </div>
-                        <div class="flex gap-3 pt-3 border-t dark:border-gray-600">
+                        <div class="flex flex-col sm:flex-row gap-3 pt-3 border-t dark:border-gray-600">
                             <input type="text" x-model="streamLabel" placeholder="Station Label"
-                                class="px-3 py-2 border dark:border-gray-600 bg-white dark:bg-gray-800 rounded-lg flex-1">
+                                class="px-3 py-2 border dark:border-gray-600 bg-white dark:bg-gray-800 rounded-lg flex-1 w-full">
                             <button @click="saveStream()"
-                                class="px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700"
+                                class="px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 w-full sm:w-auto"
                                 :disabled="!selectedUrl || !streamLabel">Save Stream</button>
                         </div>
                     </div>
                 </template>
             </div>
 
-            <div class="bg-white dark:bg-gray-800 rounded-lg shadow overflow-hidden">
+            <div class="bg-white dark:bg-gray-800 rounded-lg shadow overflow-x-auto">
                 <table class="min-w-full divide-y divide-gray-200 dark:divide-gray-700">
                     <thead class="bg-gray-100 dark:bg-gray-700">
                         <tr>
                             <th
-                                class="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase">
+                                class="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase whitespace-nowrap">
                                 Label</th>
                             <th
-                                class="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase">
+                                class="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase whitespace-nowrap">
                                 Stream Source</th>
                             <th
-                                class="px-4 py-3 text-right text-xs font-medium text-gray-500 dark:text-gray-300 uppercase">
+                                class="px-4 py-3 text-right text-xs font-medium text-gray-500 dark:text-gray-300 uppercase whitespace-nowrap">
                                 Actions</th>
                         </tr>
                     </thead>
                     <tbody class="divide-y divide-gray-200 dark:divide-gray-700">
                         <template x-for="stream in streams" :key="stream.id">
                             <tr class="bg-white dark:bg-gray-800">
-                                <td class="px-4 py-3 text-sm font-semibold" x-text="stream.label"></td>
-                                <td class="px-4 py-3 text-sm text-gray-600 dark:text-gray-400 font-mono text-xs break-all"
+                                <td class="px-4 py-3 text-sm font-semibold whitespace-nowrap" x-text="stream.label">
+                                </td>
+                                <td class="px-4 py-3 text-sm text-gray-600 dark:text-gray-400 font-mono text-xs whitespace-nowrap"
                                     x-text="stream.stream_url"></td>
-                                <td class="px-4 py-3 text-right flex justify-end items-center gap-4">
+                                <td class="px-4 py-3 text-right flex justify-end items-center gap-4 whitespace-nowrap">
                                     <button @click="togglePlay(stream.stream_url)" title="Toggle Playback"
                                         class="text-xl hover:scale-125 transition-transform"
                                         x-text="globalAudioUrl === stream.stream_url ? '⏹️' : '▶️'"></button>
@@ -189,7 +192,7 @@
         </div>
 
         <div x-show="activeTab === 'schedules'" x-cloak>
-            <div class="bg-white dark:bg-gray-800 rounded-lg shadow p-6 mb-6">
+            <div class="bg-white dark:bg-gray-800 rounded-lg shadow p-4 sm:p-6 mb-6">
                 <h2 class="text-xl font-bold mb-4" x-text="editingScheduleId ? 'Edit Schedule' : 'Create New Schedule'">
                 </h2>
                 <div class="grid grid-cols-1 md:grid-cols-5 gap-4 items-end">
@@ -230,39 +233,39 @@
                 </div>
             </div>
 
-            <div class="bg-white dark:bg-gray-800 rounded-lg shadow overflow-hidden">
+            <div class="bg-white dark:bg-gray-800 rounded-lg shadow overflow-x-auto">
                 <table class="min-w-full divide-y divide-gray-200 dark:divide-gray-700">
                     <thead class="bg-gray-100 dark:bg-gray-700">
                         <tr>
                             <th
-                                class="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase">
+                                class="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase whitespace-nowrap">
                                 Stream</th>
                             <th
-                                class="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase">
+                                class="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase whitespace-nowrap">
                                 Description</th>
                             <th
-                                class="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase">
+                                class="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase whitespace-nowrap">
                                 Start Time</th>
                             <th
-                                class="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase">
+                                class="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase whitespace-nowrap">
                                 End Time</th>
                             <th
-                                class="px-4 py-3 text-right text-xs font-medium text-gray-500 dark:text-gray-300 uppercase">
+                                class="px-4 py-3 text-right text-xs font-medium text-gray-500 dark:text-gray-300 uppercase whitespace-nowrap">
                                 Actions</th>
                         </tr>
                     </thead>
                     <tbody class="divide-y divide-gray-200 dark:divide-gray-700">
                         <template x-for="sched in schedules" :key="sched.id">
                             <tr class="bg-white dark:bg-gray-800">
-                                <td class="px-4 py-3 text-sm font-semibold" x-text="sched.stream_label || 'Unknown'">
-                                </td>
-                                <td class="px-4 py-3 text-sm" x-text="sched.description || '-'"></td>
-                                <td class="px-4 py-3 text-sm"
+                                <td class="px-4 py-3 text-sm font-semibold whitespace-nowrap"
+                                    x-text="sched.stream_label || 'Unknown'"></td>
+                                <td class="px-4 py-3 text-sm whitespace-nowrap" x-text="sched.description || '-'"></td>
+                                <td class="px-4 py-3 text-sm whitespace-nowrap"
                                     x-text="sched.start_time ? new Date(sched.start_time).toLocaleString() : 'N/A'">
                                 </td>
-                                <td class="px-4 py-3 text-sm"
+                                <td class="px-4 py-3 text-sm whitespace-nowrap"
                                     x-text="sched.end_time ? new Date(sched.end_time).toLocaleString() : 'N/A'"></td>
-                                <td class="px-4 py-3 text-right space-x-3">
+                                <td class="px-4 py-3 text-right space-x-3 whitespace-nowrap">
                                     <button @click="editSchedule(sched)"
                                         class="text-blue-600 dark:text-blue-400 font-semibold">Edit</button>
                                     <button @click="deleteSchedule(sched.id)"
@@ -278,11 +281,11 @@
         <div x-show="activeTab === 'settings'" x-cloak class="space-y-6">
 
             <div
-                class="bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-lg shadow p-6 flex flex-col sm:flex-row justify-between items-center gap-4">
-                <div>
+                class="bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-lg shadow p-4 sm:p-6 flex flex-col sm:flex-row justify-between items-center gap-4">
+                <div class="text-center sm:text-left">
                     <h3 class="font-bold text-xl text-blue-800 dark:text-blue-300">Save Configuration</h3>
-                    <p class="text-sm text-blue-600 dark:text-blue-400">Remember to save your settings to apply changes
-                        globally across the engine.</p>
+                    <p class="text-sm text-blue-600 dark:text-blue-400 mt-1">Remember to save your settings to apply
+                        changes globally across the engine.</p>
                 </div>
                 <button @click="saveSettings()"
                     class="px-8 py-3 bg-blue-600 text-white font-bold rounded-lg hover:bg-blue-700 shadow-md text-lg transition-transform hover:scale-105 w-full sm:w-auto whitespace-nowrap">
@@ -293,7 +296,7 @@
             <div class="grid grid-cols-1 md:grid-cols-2 gap-6 items-start">
 
                 <div class="space-y-6">
-                    <div class="bg-white dark:bg-gray-800 rounded-lg shadow p-6">
+                    <div class="bg-white dark:bg-gray-800 rounded-lg shadow p-4 sm:p-6">
                         <h2 class="text-xl font-bold mb-4 border-b dark:border-gray-700 pb-2">General Engine Settings
                         </h2>
                         <div class="space-y-4">
@@ -307,7 +310,7 @@
                         </div>
                     </div>
 
-                    <div class="bg-white dark:bg-gray-800 rounded-lg shadow p-6 border-t-4 border-red-600">
+                    <div class="bg-white dark:bg-gray-800 rounded-lg shadow p-4 sm:p-6 border-t-4 border-red-600">
                         <h2 class="text-xl font-bold mb-2 text-red-600 flex items-center gap-2">⚠️ Danger Zone</h2>
                         <p class="text-sm text-gray-600 dark:text-gray-400 mb-4">
                             Need to start from scratch? This will wipe your database tables (streams, schedules,
@@ -316,13 +319,13 @@
                             factory reset.
                         </p>
                         <button @click="purgeDatabase()"
-                            class="px-6 py-2 bg-red-600 text-white font-bold rounded-lg hover:bg-red-700 transition-colors shadow-sm">
+                            class="px-6 py-2 bg-red-600 text-white font-bold rounded-lg hover:bg-red-700 transition-colors shadow-sm w-full sm:w-auto">
                             Factory Reset & Purge Data
                         </button>
                     </div>
                 </div>
 
-                <div class="bg-white dark:bg-gray-800 rounded-lg shadow p-6">
+                <div class="bg-white dark:bg-gray-800 rounded-lg shadow p-4 sm:p-6">
                     <h2 class="text-xl font-bold mb-4 border-b dark:border-gray-700 pb-2">Telegram Integration</h2>
 
                     <div class="space-y-4 mb-6">
@@ -428,7 +431,7 @@
                     <button @click="fetchLogs()"
                         class="px-3 py-1 bg-gray-700 text-gray-200 rounded hover:bg-gray-600 text-sm">Refresh</button>
                 </div>
-                <pre class="flex-1 overflow-y-auto text-green-400 font-mono text-sm p-4 bg-black rounded whitespace-pre-wrap"
+                <pre class="flex-1 overflow-y-auto text-green-400 font-mono text-xs sm:text-sm p-4 bg-black rounded whitespace-pre-wrap"
                     x-text="appLogs"></pre>
             </div>
         </div>
@@ -445,7 +448,9 @@
         function appData() {
             return {
                 activeTab: 'dashboard',
-                darkMode: localStorage.getItem('darkMode') === 'true',
+                darkMode: localStorage.getItem('darkMode') !== null
+                    ? localStorage.getItem('darkMode') === 'true'
+                    : window.matchMedia('(prefers-color-scheme: dark)').matches,
                 showToken: false,
                 streams: [], recordings: [], schedules: [],
                 probeUrl: '', discoveredUrls: [], selectedUrl: null, streamLabel: '',
@@ -467,7 +472,10 @@
                     }, 1000);
                 },
 
-                toggleDarkMode() { this.darkMode = !this.darkMode; localStorage.setItem('darkMode', this.darkMode); },
+                toggleDarkMode() {
+                    this.darkMode = !this.darkMode;
+                    localStorage.setItem('darkMode', this.darkMode);
+                },
                 formatSize(bytes) { return bytes ? (bytes / (1024 * 1024)).toFixed(2) + ' MB' : '0.00 MB'; },
                 formatDuration(seconds) {
                     if (!seconds) return '00:00:00';
@@ -594,7 +602,6 @@
                     }
                 },
 
-                // Delete Handlers with Confirmation Prompts
                 deleteStream(id) {
                     if (confirm("Are you sure you want to permanently delete this stream?")) {
                         fetch(`/api/streams/${id}`, { method: 'DELETE' }).then(() => this.fetchStreams());
@@ -623,6 +630,7 @@
                     fetch(url, { method: this.editingScheduleId ? 'PATCH' : 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) })
                         .then(r => r.json()).then((res) => { if (res.success) { this.resetScheduleForm(); this.fetchSchedules(); } else alert(res.error); });
                 },
+
                 editSchedule(sched) {
                     this.editingScheduleId = sched.id;
                     this.schedStreamId = sched.stream_id;
@@ -641,6 +649,7 @@
 
                     window.scrollTo({ top: 0, behavior: 'smooth' });
                 },
+
                 resetScheduleForm() { this.editingScheduleId = null; this.schedStreamId = ''; this.schedDescription = ''; this.startTime = ''; this.endTime = ''; }
             }
         }
