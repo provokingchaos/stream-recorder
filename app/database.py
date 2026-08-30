@@ -1,9 +1,14 @@
 import sqlite3
 import datetime
+import os
+from pathlib import Path
 from contextlib import contextmanager
 
-DB_PATH = "/config/stream_recorder.db"
-LOG_PATH = "/config/app.log"
+CONFIG_DIR = os.getenv("CONFIG_DIR", "/config")
+os.makedirs(CONFIG_DIR, exist_ok=True)
+
+DB_PATH = os.path.join(CONFIG_DIR, "stream_recorder.db")
+LOG_PATH = os.path.join(CONFIG_DIR, "app.log")
 
 @contextmanager
 def get_db():
@@ -68,12 +73,31 @@ def init_db():
                 value TEXT NOT NULL
             )
         """)
+        
+        # Insert default settings if they do not exist
+        default_settings = {
+            "recordings_dir": "/recordings",
+            "telegram_token": "",
+            "telegram_chat_id": "",
+            "notif_manual_start": "false",
+            "notif_manual_stop": "false",
+            "notif_sched_start": "false",
+            "notif_sched_stop": "false",
+            "notif_stream_connected": "false",
+            "notif_stream_disconnected": "false"
+        }
+        for k, v in default_settings.items():
+            conn.execute("INSERT OR IGNORE INTO settings (key, value) VALUES (?, ?)", (k, v))
+
         conn.commit()
 
 def get_setting(key: str, default: str = "") -> str:
     with get_db() as conn:
-        row = conn.execute("SELECT value FROM settings WHERE key = ?", (key,)).fetchone()
-        return row["value"] if row else default
+        try:
+            row = conn.execute("SELECT value FROM settings WHERE key = ?", (key,)).fetchone()
+            return row["value"] if row else default
+        except sqlite3.OperationalError:
+            return default
 
 def set_setting(key: str, value: str):
     with get_db() as conn:
