@@ -65,7 +65,6 @@ def _run_highlight(recording_id, audio_path, transcript_path, output_path):
         if not lines:
             raise ValueError("Transcript is empty or unparsable.")
 
-        # Provide immediate UI and Log feedback before the massive download blocks execution
         log_event(f"Highlight engine starting for #{recording_id}. Verifying/Downloading Qwen AI model (1.1GB)...")
         with get_db() as conn:
             conn.execute("UPDATE recordings SET highlight_progress = 5 WHERE id = ?", (recording_id,))
@@ -105,7 +104,7 @@ def _run_highlight(recording_id, audio_path, transcript_path, output_path):
 
             chunk_text = "\n".join([f"[{l['start']:.2f}s -> {l['end']:.2f}s] {l['text']}" for l in chunk])
 
-            system_msg = "You are a JSON audio highlight extraction AI. Extract timestamp segments that match the user's criteria. Output ONLY a valid JSON array of objects with 'start' and 'end' float keys. Example: [{\"start\": 12.0, \"end\": 45.5}]. If no matches, output []."
+            system_msg = "You are a strict JSON data extraction AI. Output ONLY a valid JSON array containing 'start' and 'end' float keys. DO NOT output conversational text, markdown formatting, or explanations. If no matches exist, output exactly []."
             user_msg = f"Criteria: {user_prompt}\n\nTranscript:\n{chunk_text}"
 
             response = llm.create_chat_completion(
@@ -118,14 +117,21 @@ def _run_highlight(recording_id, audio_path, transcript_path, output_path):
             
             try:
                 result = response["choices"][0]["message"]["content"]
-                result = re.sub(r'```json\s*', '', result)
-                result = re.sub(r'```\s*', '', result).strip()
                 
-                parsed = json.loads(result)
-                if isinstance(parsed, list):
-                    all_highlights.extend(parsed)
+                # Robust extraction: isolate everything between the first '[' and last ']'
+                start_idx = result.find('[')
+                end_idx = result.rfind(']')
+                
+                if start_idx != -1 and end_idx != -1 and end_idx >= start_idx:
+                    json_str = result[start_idx:end_idx+1]
+                    parsed = json.loads(json_str)
+                    if isinstance(parsed, list):
+                        all_highlights.extend(parsed)
+                else:
+                    log_event(f"No JSON array found in chunk {i} response. Raw AI output: {result}")
+                    
             except Exception as e:
-                log_event(f"Highlight JSON parse error on chunk {i}: {e}")
+                log_event(f"Highlight JSON parse error on chunk {i}: {e}. Raw AI output: {result}")
 
         with get_db() as conn:
             conn.execute("UPDATE recordings SET highlight_progress = 90 WHERE id = ?", (recording_id,))
