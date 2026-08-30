@@ -205,6 +205,7 @@ def get_recordings_api():
             """).fetchall()
 
             now_dt = datetime.datetime.now()
+            deleted_any = False
             
             for r in rows:
                 rec_id = r[0]
@@ -217,6 +218,21 @@ def get_recordings_api():
                 file_size = r[7]
                 status = r[8]
                 stream_label = r[9]
+
+                # Auto-cleanup logic: Remove DB row if physical file is missing
+                if status == "completed":
+                    file_exists = False
+                    if filepath and os.path.exists(filepath):
+                        file_exists = True
+                    elif filename:
+                        fallback_path = os.path.join(rec_dir, os.path.basename(filename))
+                        if os.path.exists(fallback_path):
+                            file_exists = True
+                    
+                    if not file_exists:
+                        conn.execute("DELETE FROM recordings WHERE id = ?", (rec_id,))
+                        deleted_any = True
+                        continue # Skip appending to dashboard results
 
                 if status == "recording":
                     if start_time_str:
@@ -244,6 +260,9 @@ def get_recordings_api():
                     "status": status,
                     "stream_label": stream_label
                 })
+            
+            if deleted_any:
+                conn.commit()
     except Exception as e:
         print(f"Error fetching recordings: {e}", flush=True)
     return results
