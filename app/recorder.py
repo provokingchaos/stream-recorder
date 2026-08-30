@@ -114,11 +114,29 @@ class StreamRecorder:
 
     async def _finalize_recording(self):
         end_time = datetime.datetime.now()
-        duration_seconds = int((end_time - self.start_time).total_seconds()) if self.start_time else 0
         
         file_size = 0
+        duration_seconds = 0
+
         if self.output_path and os.path.exists(self.output_path):
             file_size = os.path.getsize(self.output_path)
+            
+            try:
+                proc = await asyncio.create_subprocess_exec(
+                    "ffprobe", "-v", "error", "-show_entries",
+                    "format=duration", "-of",
+                    "default=noprint_wrappers=1:nokey=1", self.output_path,
+                    stdout=asyncio.subprocess.PIPE,
+                    stderr=asyncio.subprocess.DEVNULL
+                )
+                stdout, _ = await proc.communicate()
+                if stdout:
+                    duration_seconds = int(float(stdout.decode().strip()))
+            except Exception:
+                pass
+
+        if duration_seconds <= 0:
+            duration_seconds = int((end_time - self.start_time).total_seconds()) if self.start_time else 0
 
         with get_db() as conn:
             conn.execute(
