@@ -65,12 +65,20 @@ def _run_highlight(recording_id, audio_path, transcript_path, output_path):
         if not lines:
             raise ValueError("Transcript is empty or unparsable.")
 
+        # Provide immediate UI and Log feedback before the massive download blocks execution
+        log_event(f"Highlight engine starting for #{recording_id}. Verifying/Downloading Qwen AI model (1.1GB)...")
+        with get_db() as conn:
+            conn.execute("UPDATE recordings SET highlight_progress = 5 WHERE id = ?", (recording_id,))
+            conn.commit()
+
         config_dir = os.getenv("CONFIG_DIR", "/config")
         model_path = hf_hub_download(
             repo_id="Qwen/Qwen2.5-1.5B-Instruct-GGUF",
             filename="qwen2.5-1.5b-instruct-q4_k_m.gguf",
             cache_dir=os.path.join(config_dir, "models")
         )
+        
+        log_event(f"Qwen AI model loaded for #{recording_id}. Beginning transcript analysis...")
         llm = Llama(model_path=model_path, n_ctx=4096, verbose=False)
 
         chunks = []
