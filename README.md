@@ -1,11 +1,5 @@
 <p align="center">
-  <img src="assets/stream-recorder-logo.png" alt="Stream Recorder Logo" width="128" height="128">
-</p>
-
-<h1 align="center">Stream Recorder</h1>
-
-<p align="center">
-  A lightweight, automated stream recording and scheduling platform packaged as a multi-architecture Docker container. Built with FastAPI, SQLite, APScheduler, and FFmpeg, Stream Recorder delivers real-time capture, live telemetry, browser-based management, and instant HTML Telegram notifications.
+  <img src="https://raw.githubusercontent.com/provokingchaos/stream-recorder/main/assets/stream-recorder-logo.png" alt="Stream Recorder Logo" width="128" height="128" />
 </p>
 
 # Stream Recorder
