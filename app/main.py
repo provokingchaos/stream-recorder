@@ -89,7 +89,8 @@ async def probe_stream(req: StreamProbe):
         discovered_urls = await sniff_stream_url(req.url)
         return {"success": True, "stream_urls": discovered_urls}
     except Exception as e:
-        raise HTTPException(status_code=400, detail=str(e))
+        log_event(f"Stream probe failed: {e}")
+        raise HTTPException(status_code=400, detail="Failed to probe stream URL. See logs for details.")
 
 @app.get("/api/streams")
 def list_streams():
@@ -350,7 +351,8 @@ def get_logs():
             log_lines = [f"[{r['timestamp']}] {r['message']}" for r in reversed(rows)]
             return {"logs": "\n".join(log_lines)}
     except Exception as e:
-        return {"logs": f"Error reading logs: {str(e)}"}
+        print(f"Error serving logs API: {e}", flush=True)
+        return {"logs": "Error reading application logs from the database."}
 
 @app.get("/api/recordings/{rec_id}/play")
 def play_recording(rec_id: int):
@@ -424,7 +426,8 @@ def purge_database():
         log_event("SYSTEM PURGE: Database factory reset executed by user.")
         return {"success": True}
     except Exception as e:
-        return {"success": False, "error": str(e)}
+        log_event(f"Database purge failed: {e}")
+        return {"success": False, "error": "Database purge failed due to an internal error."}
 
 @app.get("/api/sys_settings")
 def get_sys_settings():
@@ -458,8 +461,8 @@ def get_sys_settings():
 
 @app.post("/api/sys_settings")
 async def post_sys_settings(request: Request):
-    payload = await request.json()
     try:
+        payload = await request.json()
         prompt_content = payload.pop("highlight_prompt", None)
 
         with get_db() as conn:
@@ -476,21 +479,26 @@ async def post_sys_settings(request: Request):
 
         return JSONResponse({"success": True})
     except Exception as e:
-        return JSONResponse({"success": False, "error": str(e)})
+        log_event(f"Failed to save system settings: {e}")
+        return JSONResponse({"success": False, "error": "Failed to save configuration settings."})
 
 @app.post("/api/sys_settings/test")
 async def test_sys_settings(request: Request):
-    payload = await request.json()
-    from app.notifier import send_telegram_notification
-    mock_data = {
-        "stream_label": "Example Station",
-        "desc_text": "(Morning Show)",
-        "start_str": "07:00 PM",
-        "end_str": "10:00 PM",
-        "now_str": "10:00 PM"
-    }
-    send_telegram_notification(payload.get("notif_type", ""), force=True, **mock_data)
-    return JSONResponse({"success": True})
+    try:
+        payload = await request.json()
+        from app.notifier import send_telegram_notification
+        mock_data = {
+            "stream_label": "Example Station",
+            "desc_text": "(Morning Show)",
+            "start_str": "07:00 PM",
+            "end_str": "10:00 PM",
+            "now_str": "10:00 PM"
+        }
+        send_telegram_notification(payload.get("notif_type", ""), force=True, **mock_data)
+        return JSONResponse({"success": True})
+    except Exception as e:
+        log_event(f"Telegram test notification failed: {e}")
+        return JSONResponse({"success": False, "error": "Failed to dispatch test notification."})
 
 @app.post("/api/model/cache")
 async def cache_ai_model(req: ModelCacheRequest):
@@ -502,7 +510,7 @@ async def cache_ai_model(req: ModelCacheRequest):
         return JSONResponse({"success": True})
     except Exception as e:
         log_event(f"Model cache failed: {e}")
-        return JSONResponse({"success": False, "error": str(e)}, status_code=500)
+        return JSONResponse({"success": False, "error": "Failed to cache AI model."}, status_code=500)
 
 @app.post("/api/schedules")
 async def create_schedule(request: Request):
@@ -530,7 +538,7 @@ async def create_schedule(request: Request):
         return JSONResponse({"success": True, "id": schedule_id})
     except Exception as e:
         log_event(f"Failed to create schedule: {e}")
-        return JSONResponse({"success": False, "error": str(e)}, status_code=500)
+        return JSONResponse({"success": False, "error": "Failed to create schedule recording entry."}, status_code=500)
 
 @app.patch("/api/schedules/{schedule_id}")
 async def update_schedule(schedule_id: int, request: Request):
@@ -554,7 +562,7 @@ async def update_schedule(schedule_id: int, request: Request):
         return JSONResponse({"success": True})
     except Exception as e:
         log_event(f"Failed to update schedule #{schedule_id}: {e}")
-        return JSONResponse({"success": False, "error": str(e)}, status_code=500)
+        return JSONResponse({"success": False, "error": "Failed to update existing schedule."}, status_code=500)
 
 @app.delete("/api/schedules/{schedule_id}")
 def delete_schedule_api(schedule_id: int):
@@ -566,4 +574,5 @@ def delete_schedule_api(schedule_id: int):
         log_event(f"Deleted schedule #{schedule_id}")
         return JSONResponse({"success": True})
     except Exception as e:
-        return JSONResponse({"success": False, "error": str(e)}, status_code=500)
+        log_event(f"Failed to delete schedule #{schedule_id}: {e}")
+        return JSONResponse({"success": False, "error": "Failed to delete schedule."}, status_code=500)
