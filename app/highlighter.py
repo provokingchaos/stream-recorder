@@ -111,7 +111,8 @@ def _run_highlight(recording_id, audio_path, transcript_path, output_path):
                     {"role": "system", "content": system_msg},
                     {"role": "user", "content": user_msg}
                 ],
-                temperature=0.1
+                temperature=0.1,
+                max_tokens=512
             )
             
             try:
