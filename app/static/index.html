@@ -675,7 +675,8 @@
                     <button @click="fetchLogs()"
                         class="px-4 py-1.5 bg-gray-700 text-gray-200 rounded-lg hover:bg-gray-600 font-semibold text-sm transition-colors">Refresh</button>
                 </div>
-                <pre class="flex-1 overflow-y-auto text-green-400 font-mono text-xs sm:text-sm p-4 bg-black rounded-lg whitespace-pre-wrap"
+                <pre id="log-container"
+                    class="flex-1 overflow-y-auto text-green-400 font-mono text-xs sm:text-sm p-4 bg-black rounded-lg whitespace-pre-wrap"
                     x-text="appLogs"></pre>
             </div>
         </div>
@@ -760,7 +761,21 @@
                 fetchStreams() { fetch('/api/streams').then(r => r.json()).then(d => this.streams = d); },
                 fetchRecordings() { fetch('/api/recordings').then(r => r.json()).then(d => this.recordings = d); },
                 fetchSchedules() { fetch('/api/schedules').then(r => r.json()).then(d => this.schedules = d); },
-                fetchLogs() { fetch('/api/logs').then(r => r.json()).then(d => this.appLogs = d.logs); },
+
+                fetchLogs() {
+                    fetch('/api/logs').then(r => r.json()).then(d => {
+                        const container = document.getElementById('log-container');
+                        const isAtBottom = container ? (container.scrollHeight - container.scrollTop <= container.clientHeight + 50) : true;
+
+                        this.appLogs = d.logs;
+
+                        if (isAtBottom && container) {
+                            setTimeout(() => {
+                                container.scrollTop = container.scrollHeight;
+                            }, 50);
+                        }
+                    });
+                },
 
                 fetchSettings() {
                     fetch('/api/sys_settings?t=' + Date.now()).then(r => r.json()).then(d => {
