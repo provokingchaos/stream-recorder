@@ -142,14 +142,14 @@
                             <div class="flex flex-col gap-2">
                                 <template
                                     x-if="rec.status === 'completed' && rec.transcription_status !== 'processing'">
-                                    <button @click="startTranscription(rec.id)"
+                                    <button @click="startTranscription(rec.id, rec.transcription_status)"
                                         class="px-4 py-2 bg-blue-100 dark:bg-blue-900/50 text-blue-700 dark:text-blue-400 hover:bg-blue-200 dark:hover:bg-blue-900/70 rounded-lg font-semibold text-sm transition-colors"
                                         x-text="(rec.transcription_status === 'completed' || rec.transcription_status === 'failed') ? 'Redo Transcription' : 'Transcribe'"></button>
                                 </template>
 
                                 <template
                                     x-if="rec.status === 'completed' && rec.transcription_status === 'completed' && rec.highlight_status !== 'processing'">
-                                    <button @click="startHighlight(rec.id)"
+                                    <button @click="startHighlight(rec.id, rec.highlight_status)"
                                         class="px-4 py-2 bg-purple-100 dark:bg-purple-900/50 text-purple-700 dark:text-purple-400 hover:bg-purple-200 dark:hover:bg-purple-900/70 rounded-lg font-semibold text-sm transition-colors"
                                         x-text="(rec.highlight_status === 'completed' || rec.highlight_status === 'failed') ? 'Redo Highlight' : 'Create Highlight'"></button>
                                 </template>
@@ -863,11 +863,17 @@
                 startRecording(id) { fetch('/api/record/start', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ stream_id: parseInt(id, 10) }) }).then(() => { this.fetchRecordings(); this.activeTab = 'dashboard'; }); },
                 stopRecording(id) { fetch(`/api/record/stop/${id}`, { method: 'POST' }).then(() => this.fetchRecordings()); },
 
-                startTranscription(id) {
+                startTranscription(id, currentStatus) {
+                    if ((currentStatus === 'completed' || currentStatus === 'failed') && !confirm("Are you sure you want to redo the transcription? This will overwrite the existing transcript.")) {
+                        return;
+                    }
                     fetch(`/api/recordings/${id}/transcribe`, { method: 'POST' }).then(() => this.fetchRecordings());
                 },
 
-                startHighlight(id) {
+                startHighlight(id, currentStatus) {
+                    if ((currentStatus === 'completed' || currentStatus === 'failed') && !confirm("Are you sure you want to redo the highlight generation? This will overwrite the existing highlight reel.")) {
+                        return;
+                    }
                     fetch(`/api/recordings/${id}/highlight`, { method: 'POST' }).then(() => this.fetchRecordings());
                 },
 
