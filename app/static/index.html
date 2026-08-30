@@ -454,17 +454,24 @@
                             </label>
                         </div>
 
-                        <div class="border-t dark:border-gray-700 pt-4">
-                            <label class="block text-sm font-medium mb-1">Highlight Prompt Filename</label>
-                            <input type="text" x-model="settings.highlight_prompt_file"
-                                placeholder="highlight_prompt.txt"
-                                class="w-full px-3 py-2 border dark:border-gray-600 bg-gray-50 dark:bg-gray-700 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none mb-3">
+                        <div class="grid grid-cols-1 sm:grid-cols-2 gap-4 border-t dark:border-gray-700 pt-4">
+                            <div class="sm:col-span-2">
+                                <label class="block text-sm font-medium mb-1">AI Engine Logging Level</label>
+                                <select x-model="settings.ai_log_level"
+                                    class="w-full px-3 py-2 border dark:border-gray-600 bg-gray-50 dark:bg-gray-700 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none">
+                                    <option value="ERROR">Minimal (Errors Only)</option>
+                                    <option value="INFO">Standard (Status & Progress)</option>
+                                    <option value="DEBUG">Verbose (Full AI Output & Debug)</option>
+                                </select>
+                                <p class="text-xs text-gray-500 dark:text-gray-400 mt-1">Controls how much data
+                                    Transcription and Highlight AIs write to App Logs.</p>
+                            </div>
+                        </div>
 
-                            <label class="block text-sm font-medium mb-2">AI Extraction Prompt Content</label>
+                        <div class="border-t dark:border-gray-700 pt-4">
+                            <label class="block text-sm font-medium mb-2">AI Highlight Reel Prompt</label>
                             <textarea x-model="settings.highlight_prompt" rows="3"
                                 class="w-full px-3 py-2 border dark:border-gray-600 bg-gray-50 dark:bg-gray-700 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none text-sm font-mono"></textarea>
-                            <p class="text-xs text-gray-500 dark:text-gray-400 mt-2">Saved into your persistent /config
-                                directory under the specified filename.</p>
                         </div>
 
                         <div class="border-t dark:border-gray-700 pt-4">
@@ -668,7 +675,7 @@
                     notif_sched_stop: false, notif_stream_connected: false, notif_stream_disconnected: false,
                     auto_transcribe: false, auto_highlight: false, whisper_model: 'base.en',
                     max_concurrent_transcriptions: 1, max_concurrent_highlights: 1,
-                    highlight_prompt_file: 'highlight_prompt.txt', highlight_prompt: ''
+                    ai_log_level: 'INFO', highlight_prompt: ''
                 },
                 appLogs: 'Loading logs...',
                 isProbing: false,
@@ -726,7 +733,7 @@
                             whisper_model: d.whisper_model || 'base.en',
                             max_concurrent_transcriptions: parseInt(d.max_concurrent_transcriptions || '1', 10),
                             max_concurrent_highlights: parseInt(d.max_concurrent_highlights || '1', 10),
-                            highlight_prompt_file: d.highlight_prompt_file || 'highlight_prompt.txt',
+                            ai_log_level: d.ai_log_level || 'INFO',
                             highlight_prompt: d.highlight_prompt || ''
                         });
                     });
@@ -745,7 +752,7 @@
                     payload.whisper_model = payload.whisper_model || 'base.en';
                     payload.max_concurrent_transcriptions = String(payload.max_concurrent_transcriptions || 1);
                     payload.max_concurrent_highlights = String(payload.max_concurrent_highlights || 1);
-                    payload.highlight_prompt_file = payload.highlight_prompt_file || 'highlight_prompt.txt';
+                    payload.ai_log_level = payload.ai_log_level || 'INFO';
 
                     fetch('/api/sys_settings', {
                         method: 'POST',

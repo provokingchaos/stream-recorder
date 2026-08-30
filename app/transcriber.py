@@ -1,5 +1,6 @@
 import asyncio
 import os
+import logging
 from faster_whisper import WhisperModel
 from app.database import get_db, log_event, get_setting
 
@@ -29,6 +30,12 @@ def force_cache_model(model_size: str):
 
 def _run_transcription(recording_id: int, filepath: str, transcript_path: str):
     global _model, _loaded_model_size
+    
+    ai_log_level = get_setting("ai_log_level", "INFO")
+    level_map = {"DEBUG": logging.DEBUG, "INFO": logging.INFO, "ERROR": logging.ERROR}
+    fw_logger = logging.getLogger("faster_whisper")
+    fw_logger.setLevel(level_map.get(ai_log_level, logging.INFO))
+    
     try:
         model_size = get_setting("whisper_model", "base.en")
         

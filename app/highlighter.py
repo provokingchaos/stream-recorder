@@ -23,11 +23,7 @@ def get_highlight_semaphore():
 
 def get_prompt_filepath():
     config_dir = os.getenv("CONFIG_DIR", "/config")
-    filename = get_setting("highlight_prompt_file", "highlight_prompt.txt").strip()
-    if not filename:
-        filename = "highlight_prompt.txt"
-    filename = os.path.basename(filename)
-    return os.path.join(config_dir, filename)
+    return os.path.join(config_dir, "highlight_prompt.txt")
 
 def get_highlight_prompt():
     path = get_prompt_filepath()
@@ -77,8 +73,11 @@ def _run_highlight(recording_id, audio_path, transcript_path, output_path):
             cache_dir=os.path.join(config_dir, "models")
         )
         
+        ai_log_level = get_setting("ai_log_level", "INFO")
+        is_debug = ai_log_level == "DEBUG"
+        
         log_event(f"Qwen AI model loaded for #{recording_id}. Beginning transcript analysis...")
-        llm = Llama(model_path=model_path, n_ctx=4096, verbose=False)
+        llm = Llama(model_path=model_path, n_ctx=4096, verbose=is_debug)
 
         chunks = []
         current_chunk = []
@@ -118,8 +117,8 @@ def _run_highlight(recording_id, audio_path, transcript_path, output_path):
             try:
                 result = response["choices"][0]["message"]["content"]
                 
-                # Force X-Ray logging of the exact AI output
-                log_event(f"Chunk {i+1}/{total_chunks} AI Output: {result}")
+                if is_debug:
+                    log_event(f"Chunk {i+1}/{total_chunks} AI Output: {result}")
                 
                 start_idx = result.find('[')
                 end_idx = result.rfind(']')

@@ -21,7 +21,7 @@ from app.scheduler import init_scheduler, schedule_job, remove_scheduled_job
 from app.sniffer import sniff_stream_url
 from app.recorder import StreamRecorder, active_recordings
 from app.transcriber import transcribe_audio
-from app.highlighter import process_highlight_task, get_highlight_prompt, get_prompt_filepath
+from app.highlighter import process_highlight_task, get_highlight_prompt
 
 def rebuild_schedules_schema():
     with get_db() as conn:
@@ -339,7 +339,6 @@ def index():
 def get_logs():
     try:
         with get_db() as conn:
-            # Check if table exists before querying
             count = conn.execute("SELECT count(*) FROM sqlite_master WHERE type='table' AND name='logs'").fetchone()[0]
             if count == 0:
                 return {"logs": "No application logs available yet."}
@@ -453,7 +452,7 @@ def get_sys_settings():
         "whisper_model": d.get("whisper_model", "base.en"),
         "max_concurrent_transcriptions": d.get("max_concurrent_transcriptions", "1"),
         "max_concurrent_highlights": d.get("max_concurrent_highlights", "1"),
-        "highlight_prompt_file": d.get("highlight_prompt_file", "highlight_prompt.txt"),
+        "ai_log_level": d.get("ai_log_level", "INFO"),
         "highlight_prompt": prompt_text
     }
 
@@ -462,7 +461,6 @@ async def post_sys_settings(request: Request):
     payload = await request.json()
     try:
         prompt_content = payload.pop("highlight_prompt", None)
-        prompt_file = payload.get("highlight_prompt_file", None)
 
         with get_db() as conn:
             for k, v in payload.items():
@@ -471,12 +469,7 @@ async def post_sys_settings(request: Request):
 
         if prompt_content is not None:
             config_dir = os.path.abspath(os.getenv("CONFIG_DIR", "/config"))
-            raw_filename = (prompt_file or get_setting("highlight_prompt_file", "highlight_prompt.txt")).strip() or "highlight_prompt.txt"
-            target_filename = os.path.basename(raw_filename)
-            target_path = os.path.abspath(os.path.join(config_dir, target_filename))
-            
-            if os.path.commonpath([config_dir, target_path]) != config_dir:
-                raise ValueError("Security violation: Path traversal attempt detected.")
+            target_path = os.path.abspath(os.path.join(config_dir, "highlight_prompt.txt"))
                 
             with open(target_path, "w", encoding="utf-8") as f:
                 f.write(prompt_content)
