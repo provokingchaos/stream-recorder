@@ -637,6 +637,20 @@
                 </div>
             </div>
 
+            <div
+                class="bg-white dark:bg-gray-800 rounded-lg shadow p-4 sm:p-6 border border-gray-200 dark:border-gray-700">
+                <h2 class="text-xl font-bold mb-2 flex items-center gap-2">🧹 Storage & Cache</h2>
+                <p class="text-sm text-gray-600 dark:text-gray-400 mb-5">
+                    Testing multiple AI model sizes can quickly consume gigabytes of disk space. Wipe the model cache to
+                    delete all downloaded Whisper and Qwen models. The engine will automatically re-download your active
+                    models the next time a job runs.
+                </p>
+                <button @click="clearModelCache()"
+                    class="px-6 py-3 bg-gray-200 dark:bg-gray-700 text-gray-800 dark:text-gray-200 font-bold rounded-lg hover:bg-gray-300 dark:hover:bg-gray-600 transition-colors shadow-sm w-full sm:w-auto">
+                    Wipe AI Model Cache
+                </button>
+            </div>
+
             <div class="bg-white dark:bg-gray-800 rounded-lg shadow p-4 sm:p-6 border-t-4 border-red-600">
                 <h2 class="text-xl font-bold mb-2 text-red-600 flex items-center gap-2">⚠️ Danger Zone</h2>
                 <p class="text-sm text-gray-600 dark:text-gray-400 mb-5">
@@ -839,6 +853,17 @@
                         this.llmDownloadStatus = 'error';
                         alert('Network error: ' + e.message);
                     });
+                },
+
+                clearModelCache() {
+                    if (confirm("Are you sure you want to delete all downloaded AI models? The engine will need to re-download your selected models (which takes a few minutes) on the next run.")) {
+                        fetch('/api/model/cache', { method: 'DELETE' })
+                            .then(r => r.json())
+                            .then(d => {
+                                if (d.success) alert("AI Model cache wiped successfully.");
+                                else alert("Failed: " + d.error);
+                            }).catch(e => alert("Network error: " + e.message));
+                    }
                 },
 
                 testTelegram(type) {

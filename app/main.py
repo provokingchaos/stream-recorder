@@ -528,6 +528,21 @@ async def cache_llm_model(req: LLMCacheRequest):
         log_event(f"LLM model cache failed: {e}")
         return JSONResponse({"success": False, "error": "Failed to cache LLM model."}, status_code=500)
 
+@app.delete("/api/model/cache")
+async def delete_model_cache():
+    try:
+        import shutil
+        config_dir = os.getenv("CONFIG_DIR", "/config")
+        model_dir = os.path.join(config_dir, "models")
+        if os.path.exists(model_dir):
+            shutil.rmtree(model_dir)
+        os.makedirs(model_dir, exist_ok=True)
+        log_event("AI Model Cache completely wiped by user.")
+        return JSONResponse({"success": True})
+    except Exception as e:
+        log_event(f"Failed to clear model cache: {e}")
+        return JSONResponse({"success": False, "error": "Failed to clear model cache."}, status_code=500)
+
 @app.post("/api/schedules")
 async def create_schedule(request: Request):
     try:
