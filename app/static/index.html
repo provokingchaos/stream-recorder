@@ -475,6 +475,35 @@
                         </div>
 
                         <div class="border-t dark:border-gray-700 pt-4">
+                            <label class="block text-sm font-medium mb-2">AI Highlight Model (LLM)</label>
+                            <div class="flex flex-col sm:flex-row gap-3 items-start sm:items-center">
+                                <select x-model="settings.llm_model"
+                                    class="w-full sm:w-auto px-3 py-2 border dark:border-gray-600 bg-gray-50 dark:bg-gray-700 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none">
+                                    <option value="Qwen/Qwen2.5-0.5B-Instruct-GGUF|qwen2.5-0.5b-instruct-q4_k_m.gguf">
+                                        Qwen 2.5 0.5B (Fastest, ~400MB)</option>
+                                    <option value="Qwen/Qwen2.5-1.5B-Instruct-GGUF|qwen2.5-1.5b-instruct-q4_k_m.gguf">
+                                        Qwen 2.5 1.5B (Balanced, ~1.1GB)</option>
+                                    <option value="Qwen/Qwen2.5-3B-Instruct-GGUF|qwen2.5-3b-instruct-q4_k_m.gguf">Qwen
+                                        2.5 3B (Accurate, ~2.0GB)</option>
+                                </select>
+                                <button @click="cacheLLM()" :disabled="llmDownloadStatus === 'downloading'"
+                                    class="px-4 py-2 bg-purple-600 text-white font-semibold rounded-lg hover:bg-purple-700 disabled:opacity-50 transition-colors w-full sm:w-auto">
+                                    Force Recache
+                                </button>
+
+                                <span x-show="llmDownloadStatus === 'downloading'"
+                                    class="px-3 py-1.5 bg-yellow-100 text-yellow-800 dark:bg-yellow-900/50 dark:text-yellow-200 text-xs font-bold rounded-full animate-pulse whitespace-nowrap">DOWNLOADING...</span>
+                                <span x-show="llmDownloadStatus === 'downloaded'"
+                                    class="px-3 py-1.5 bg-green-100 text-green-800 dark:bg-green-900/50 dark:text-green-200 text-xs font-bold rounded-full whitespace-nowrap">DOWNLOADED</span>
+                                <span x-show="llmDownloadStatus === 'error'"
+                                    class="px-3 py-1.5 bg-red-100 text-red-800 dark:bg-red-900/50 dark:text-red-200 text-xs font-bold rounded-full whitespace-nowrap">FAILED</span>
+                            </div>
+                            <p class="text-xs text-gray-500 dark:text-gray-400 mt-3">Choose the local LLM used to
+                                extract highlights. Larger models process chunks slower but follow JSON rules better.
+                            </p>
+                        </div>
+
+                        <div class="border-t dark:border-gray-700 pt-4">
                             <label class="block text-sm font-medium mb-2">AI Transcription Model</label>
                             <div class="flex flex-col sm:flex-row gap-3 items-start sm:items-center">
                                 <select x-model="settings.whisper_model"
@@ -669,11 +698,13 @@
                 schedStreamId: '', schedDescription: '', startTime: '', endTime: '', editingScheduleId: null,
                 globalAudioUrl: null,
                 modelDownloadStatus: 'idle',
+                llmDownloadStatus: 'idle',
                 settings: {
                     recordings_dir: '/recordings', telegram_token: '', telegram_chat_id: '',
                     notif_manual_start: false, notif_manual_stop: false, notif_sched_start: false,
                     notif_sched_stop: false, notif_stream_connected: false, notif_stream_disconnected: false,
                     auto_transcribe: false, auto_highlight: false, whisper_model: 'base.en',
+                    llm_model: 'Qwen/Qwen2.5-1.5B-Instruct-GGUF|qwen2.5-1.5b-instruct-q4_k_m.gguf',
                     max_concurrent_transcriptions: 1, max_concurrent_highlights: 1,
                     ai_log_level: 'INFO', highlight_prompt: ''
                 },
@@ -731,6 +762,7 @@
                             auto_transcribe: d.auto_transcribe === 'true',
                             auto_highlight: d.auto_highlight === 'true',
                             whisper_model: d.whisper_model || 'base.en',
+                            llm_model: d.llm_model || 'Qwen/Qwen2.5-1.5B-Instruct-GGUF|qwen2.5-1.5b-instruct-q4_k_m.gguf',
                             max_concurrent_transcriptions: parseInt(d.max_concurrent_transcriptions || '1', 10),
                             max_concurrent_highlights: parseInt(d.max_concurrent_highlights || '1', 10),
                             ai_log_level: d.ai_log_level || 'INFO',
@@ -750,6 +782,7 @@
                     payload.auto_transcribe = payload.auto_transcribe ? 'true' : 'false';
                     payload.auto_highlight = payload.auto_highlight ? 'true' : 'false';
                     payload.whisper_model = payload.whisper_model || 'base.en';
+                    payload.llm_model = payload.llm_model || 'Qwen/Qwen2.5-1.5B-Instruct-GGUF|qwen2.5-1.5b-instruct-q4_k_m.gguf';
                     payload.max_concurrent_transcriptions = String(payload.max_concurrent_transcriptions || 1);
                     payload.max_concurrent_highlights = String(payload.max_concurrent_highlights || 1);
                     payload.ai_log_level = payload.ai_log_level || 'INFO';
@@ -784,6 +817,26 @@
                         }
                     }).catch(e => {
                         this.modelDownloadStatus = 'error';
+                        alert('Network error: ' + e.message);
+                    });
+                },
+
+                cacheLLM() {
+                    this.llmDownloadStatus = 'downloading';
+                    fetch('/api/model/llm/cache', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ model_val: this.settings.llm_model })
+                    }).then(r => r.json()).then(d => {
+                        if (d.success) {
+                            this.llmDownloadStatus = 'downloaded';
+                            setTimeout(() => { if (this.llmDownloadStatus === 'downloaded') this.llmDownloadStatus = 'idle'; }, 5000);
+                        } else {
+                            this.llmDownloadStatus = 'error';
+                            alert('LLM caching failed: ' + d.error);
+                        }
+                    }).catch(e => {
+                        this.llmDownloadStatus = 'error';
                         alert('Network error: ' + e.message);
                     });
                 },

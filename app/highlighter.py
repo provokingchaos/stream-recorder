@@ -39,6 +39,15 @@ def get_highlight_prompt():
         pass
     return default_prompt
 
+def force_cache_llm(model_val: str):
+    config_dir = os.getenv("CONFIG_DIR", "/config")
+    repo_id, filename = model_val.split("|")
+    hf_hub_download(
+        repo_id=repo_id,
+        filename=filename,
+        cache_dir=os.path.join(config_dir, "models")
+    )
+
 def parse_transcript(filepath):
     lines = []
     pattern = re.compile(r"\[([\d\.]+)s -> ([\d\.]+)s\] (.*)")
@@ -61,22 +70,25 @@ def _run_highlight(recording_id, audio_path, transcript_path, output_path):
         if not lines:
             raise ValueError("Transcript is empty or unparsable.")
 
-        log_event(f"Highlight engine starting for #{recording_id}. Verifying/Downloading Qwen AI model (1.1GB)...")
+        llm_val = get_setting("llm_model", "Qwen/Qwen2.5-1.5B-Instruct-GGUF|qwen2.5-1.5b-instruct-q4_k_m.gguf")
+        repo_id, filename = llm_val.split("|")
+
+        log_event(f"Highlight engine starting for #{recording_id}. Verifying/Downloading LLM model ({filename})...")
         with get_db() as conn:
             conn.execute("UPDATE recordings SET highlight_progress = 5 WHERE id = ?", (recording_id,))
             conn.commit()
 
         config_dir = os.getenv("CONFIG_DIR", "/config")
         model_path = hf_hub_download(
-            repo_id="Qwen/Qwen2.5-1.5B-Instruct-GGUF",
-            filename="qwen2.5-1.5b-instruct-q4_k_m.gguf",
+            repo_id=repo_id,
+            filename=filename,
             cache_dir=os.path.join(config_dir, "models")
         )
         
         ai_log_level = get_setting("ai_log_level", "INFO")
         is_debug = ai_log_level == "DEBUG"
         
-        log_event(f"Qwen AI model loaded for #{recording_id}. Beginning transcript analysis...")
+        log_event(f"LLM model loaded for #{recording_id}. Beginning transcript analysis...")
         llm = Llama(model_path=model_path, n_ctx=4096, verbose=is_debug)
 
         chunks = []

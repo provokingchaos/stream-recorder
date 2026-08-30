@@ -71,6 +71,9 @@ class ManualRecordRequest(BaseModel):
 class ModelCacheRequest(BaseModel):
     model_size: str
 
+class LLMCacheRequest(BaseModel):
+    model_val: str
+
 def resolve_recording_path(rec: dict) -> Optional[Path]:
     if rec.get("filepath"):
         candidate = Path(rec["filepath"])
@@ -453,6 +456,7 @@ def get_sys_settings():
         "auto_transcribe": d.get("auto_transcribe", "false"),
         "auto_highlight": d.get("auto_highlight", "false"),
         "whisper_model": d.get("whisper_model", "base.en"),
+        "llm_model": d.get("llm_model", "Qwen/Qwen2.5-1.5B-Instruct-GGUF|qwen2.5-1.5b-instruct-q4_k_m.gguf"),
         "max_concurrent_transcriptions": d.get("max_concurrent_transcriptions", "1"),
         "max_concurrent_highlights": d.get("max_concurrent_highlights", "1"),
         "ai_log_level": d.get("ai_log_level", "INFO"),
@@ -511,6 +515,18 @@ async def cache_ai_model(req: ModelCacheRequest):
     except Exception as e:
         log_event(f"Model cache failed: {e}")
         return JSONResponse({"success": False, "error": "Failed to cache AI model."}, status_code=500)
+
+@app.post("/api/model/llm/cache")
+async def cache_llm_model(req: LLMCacheRequest):
+    try:
+        from app.highlighter import force_cache_llm
+        import asyncio
+        await asyncio.to_thread(force_cache_llm, req.model_val)
+        log_event(f"Successfully verified/cached LLM model: {req.model_val.split('|')[1]}")
+        return JSONResponse({"success": True})
+    except Exception as e:
+        log_event(f"LLM model cache failed: {e}")
+        return JSONResponse({"success": False, "error": "Failed to cache LLM model."}, status_code=500)
 
 @app.post("/api/schedules")
 async def create_schedule(request: Request):
