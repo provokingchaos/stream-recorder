@@ -1,5 +1,14 @@
-
 import logging
+import os
+import re
+import datetime
+from pathlib import Path
+from contextlib import asynccontextmanager
+from fastapi import FastAPI, HTTPException, Request
+from fastapi.staticfiles import StaticFiles
+from fastapi.responses import HTMLResponse, StreamingResponse, FileResponse, JSONResponse
+from pydantic import BaseModel
+from typing import Optional
 
 class EndpointFilter(logging.Filter):
     def filter(self, record: logging.LogRecord) -> bool:
@@ -8,22 +17,38 @@ class EndpointFilter(logging.Filter):
 # Filter polling endpoint from Uvicorn access logs
 logging.getLogger("uvicorn.access").addFilter(EndpointFilter())
 
-from fastapi import FastAPI, HTTPException, Request
-from fastapi.staticfiles import StaticFiles
-from fastapi.responses import HTMLResponse, StreamingResponse, FileResponse
-from pydantic import BaseModel
-from contextlib import asynccontextmanager
-import os
-import re
-from pathlib import Path
-from app.database import init_db, recover_interrupted_recordings, get_db, get_setting, set_setting
+from app.database import init_db, recover_interrupted_recordings, get_db, get_setting, set_setting, log_event
 from app.scheduler import init_scheduler, schedule_job, remove_scheduled_job
 from app.sniffer import sniff_stream_url
 from app.recorder import StreamRecorder, active_recordings
 
+def rebuild_schedules_schema():
+    with get_db() as conn:
+        try:
+            # Check if legacy cron_expression column exists; if so, nuke the table
+            conn.execute("SELECT cron_expression FROM schedules LIMIT 1")
+            conn.execute("DROP TABLE schedules")
+        except Exception:
+            pass
+        
+        # Build the exact modern schema
+        conn.execute('''
+            CREATE TABLE IF NOT EXISTS schedules (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                stream_id INTEGER NOT NULL,
+                start_time TEXT NOT NULL,
+                end_time TEXT NOT NULL,
+                description TEXT DEFAULT "",
+                status TEXT DEFAULT 'pending',
+                FOREIGN KEY(stream_id) REFERENCES streams(id) ON DELETE CASCADE
+            )
+        ''')
+        conn.commit()
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     init_db()
+    rebuild_schedules_schema()
     recover_interrupted_recordings()
     init_scheduler()
     yield
@@ -32,15 +57,6 @@ app = FastAPI(title="Stream Recorder", lifespan=lifespan)
 app.mount("/static", StaticFiles(directory="app/static"), name="static")
 
 # Models
-
-
-
-
-
-
-
-from pydantic import BaseModel
-from typing import Optional
 
 class StreamCreate(BaseModel):
     label: str
@@ -61,11 +77,6 @@ class ScheduleCreateDate(BaseModel):
     end_time: str
     description: str = ""
 
-class SettingsUpdate(BaseModel):
-    recordings_dir: str
-    telegram_token: str
-    telegram_chat_id: str
-
 @app.post("/api/streams/probe")
 async def probe_stream(req: StreamProbe):
     try:
@@ -81,7 +92,6 @@ def list_streams():
 
 @app.patch("/api/streams/{stream_id}")
 def update_stream(stream_id: int, payload: StreamUpdate):
-    from app.database import get_db, log_event
     with get_db() as conn:
         conn.execute("UPDATE streams SET label = ? WHERE id = ?", (payload.label, stream_id))
         conn.commit()
@@ -90,20 +100,18 @@ def update_stream(stream_id: int, payload: StreamUpdate):
 
 @app.post("/api/streams")
 def create_stream(payload: StreamCreate):
-    from app.database import get_db, log_event
-    # Accept either payload key from the frontend
     url_to_save = payload.stream_url if payload.stream_url else payload.url
     with get_db() as conn:
         conn.execute("INSERT INTO streams (label, stream_url) VALUES (?, ?)", (payload.label, url_to_save))
         conn.commit()
     log_event(f"Added new stream: {payload.label}")
     return {"success": True}
+
 @app.delete("/api/streams/{stream_id}")
 def delete_stream(stream_id: int):
     with get_db() as conn:
         conn.execute("DELETE FROM streams WHERE id = ?", (stream_id,))
         conn.commit()
-    
     return {"success": True}
 
 # Schedules API
@@ -123,12 +131,11 @@ async def stop_recording(recording_id: int):
     if recording_id not in active_recordings:
         raise HTTPException(status_code=404, detail="Active recording not found")
     await active_recordings[recording_id].stop()
+    active_recordings.pop(recording_id, None)
     return {"success": True}
 
 @app.get("/api/recordings")
 def get_recordings_api():
-    import os, datetime
-    from app.database import get_db
     results = []
     try:
         with get_db() as conn:
@@ -166,7 +173,6 @@ def get_recordings_api():
                 status = r[8]
                 stream_label = r[9]
 
-                # If actively recording, compute live duration and check disk file size
                 if status == "recording":
                     if start_time_str:
                         try:
@@ -175,7 +181,6 @@ def get_recordings_api():
                         except Exception:
                             pass
                     
-                    # Check disk file size live
                     if filepath and os.path.exists(filepath):
                         try:
                             file_size = os.path.getsize(filepath)
@@ -202,6 +207,7 @@ def get_recordings_api():
 async def delete_recording(rec_id: int):
     if rec_id in active_recordings:
         await active_recordings[rec_id].stop()
+        active_recordings.pop(rec_id, None)
 
     with get_db() as conn:
         rec = conn.execute("SELECT filepath FROM recordings WHERE id = ?", (rec_id,)).fetchone()
@@ -214,82 +220,19 @@ async def delete_recording(rec_id: int):
         conn.commit()
     return {"success": True}
 
-@app.get("/api/stream/audio/{filename}")
-def stream_audio(filename: str, request: Request):
-    safe_filename = os.path.basename(filename)
-    rec_dir = Path(get_setting("recordings_dir", "/recordings"))
-    file_path = rec_dir / safe_filename
-    
-    if not file_path.exists():
-        raise HTTPException(status_code=404, detail="File not found")
-
-    file_size = file_path.stat().st_size
-    range_header = request.headers.get("range")
-
-    if range_header:
-        byte_start, byte_end = 0, None
-        match = re.search(r"bytes=(\d+)-(\d*)", range_header)
-        if match:
-            groups = match.groups()
-            byte_start = int(groups[0])
-            if groups[1]:
-                byte_end = int(groups[1])
-
-        if byte_end is None:
-            byte_end = file_size - 1
-        length = byte_end - byte_start + 1
-
-        def iterfile():
-            with open(file_path, "rb") as f:
-                f.seek(byte_start)
-                remaining = length
-                while remaining > 0:
-                    chunk_size = min(64 * 1024, remaining)
-                    data = f.read(chunk_size)
-                    if not data:
-                        break
-                    remaining -= len(data)
-                    yield data
-
-        headers = {
-            "Content-Range": f"bytes {byte_start}-{byte_end}/{file_size}",
-            "Accept-Ranges": "bytes",
-            "Content-Length": str(length),
-            "Content-Type": "audio/mpeg",
-        }
-        return StreamingResponse(iterfile(), status_code=206, headers=headers)
-
-    return StreamingResponse(open(file_path, "rb"), media_type="audio/mpeg")
-
-# Settings API
-@app.put("/api/settings")
-def update_settings(settings: SettingsUpdate):
-    set_setting("recordings_dir", settings.recordings_dir)
-    set_setting("telegram_bot_token", settings.telegram_bot_token)
-    set_setting("telegram_chat_id", settings.telegram_chat_id)
-    return {"success": True}
-
 @app.get("/", response_class=FileResponse)
 def index():
     return FileResponse("app/static/index.html")
 
-
-
 @app.get("/api/logs")
 def get_logs():
-    import os
-    if not os.path.exists("/config/app.log"): return {"logs": "No application logs available yet."}
+    if not os.path.exists("/config/app.log"): 
+        return {"logs": "No application logs available yet."}
     with open("/config/app.log", "r") as f:
         return {"logs": "".join(f.readlines()[-200:])}
 
-
 @app.get("/api/recordings/{rec_id}/play")
 def play_recording(rec_id: int):
-    from fastapi.responses import FileResponse
-    from fastapi import HTTPException
-    from app.database import get_db
-    import os
-    
     with get_db() as conn:
         rec = conn.execute("SELECT filepath FROM recordings WHERE id = ?", (rec_id,)).fetchone()
         
@@ -298,37 +241,10 @@ def play_recording(rec_id: int):
         
     raise HTTPException(status_code=404, detail="Recording file not found on disk.")
 
-
-
-@app.on_event("startup")
-def rebuild_schedules_schema():
-    from app.database import get_db
-    with get_db() as conn:
-        try:
-            # Check if legacy cron_expression column exists; if so, nuke the table
-            conn.execute("SELECT cron_expression FROM schedules LIMIT 1")
-            conn.execute("DROP TABLE schedules")
-        except Exception:
-            pass
-        
-        # Build the exact modern schema
-        conn.execute('''
-            CREATE TABLE IF NOT EXISTS schedules (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
-                stream_id INTEGER NOT NULL,
-                start_time TEXT NOT NULL,
-                end_time TEXT NOT NULL,
-                status TEXT DEFAULT 'pending'
-            )
-        ''')
-        conn.commit()
-
 @app.get("/api/schedules")
 def get_schedules():
-    from app.database import get_db
     with get_db() as conn:
         try:
-            # Safely JOIN to the streams table to extract the stream_label
             schedules = conn.execute('''
                 SELECT s.id, s.stream_id, s.start_time, s.end_time, s.status, s.description, st.label as stream_label 
                 FROM schedules s 
@@ -341,26 +257,18 @@ def get_schedules():
 
 @app.get("/api/recordings/{rec_id}/download")
 def download_recording(rec_id: int):
-    from fastapi.responses import FileResponse
-    from fastapi import HTTPException
-    from app.database import get_db
-    import os
-    
     with get_db() as conn:
         rec = conn.execute("SELECT filepath, filename FROM recordings WHERE id = ?", (rec_id,)).fetchone()
         
     if rec and rec["filepath"] and os.path.exists(rec["filepath"]):
-        # Passing 'filename' forces the browser to download rather than stream
         return FileResponse(path=rec["filepath"], media_type="audio/mpeg", filename=rec["filename"])
         
     raise HTTPException(status_code=404, detail="Recording file not found on disk.")
 
 @app.post("/api/purge")
 def purge_database():
-    from app.database import get_db, log_event
     try:
         with get_db() as conn:
-            # Wipe all application data from the SQLite tables
             conn.execute("DELETE FROM streams")
             conn.execute("DELETE FROM recordings")
             conn.execute("DELETE FROM schedules")
@@ -378,10 +286,7 @@ def purge_database():
         return {"success": False, "error": str(e)}
 
 async def start_recording_job(stream_id: int, duration_minutes: int = None, description: str = ""):
-    from app.recorder import StreamRecorder, active_recordings
-    from app.database import get_db, log_event
     from app.notifier import send_telegram_notification
-    import datetime
 
     try:
         with get_db() as conn:
@@ -439,66 +344,8 @@ async def start_recording_job(stream_id: int, duration_minutes: int = None, desc
     except Exception as e:
         log_event(f"Error in start_recording_job: {e}")
 
-
-@app.get("/api/settings")
-def get_settings_api():
-    from app.database import get_db
-    settings_dict = {}
-    try:
-        with get_db() as conn:
-            rows = conn.execute("SELECT key, value FROM settings").fetchall()
-            for r in rows:
-                settings_dict[r[0]] = r[1]
-    except Exception as e:
-        print(f"Error reading settings: {e}", flush=True)
-    
-    defaults = {
-        "recordings_dir": "/recordings",
-        "telegram_token": "",
-        "telegram_chat_id": "",
-        "notif_manual_start": "false",
-        "notif_manual_stop": "false",
-        "notif_sched_start": "false",
-        "notif_sched_stop": "false",
-        "notif_stream_connected": "false",
-        "notif_stream_disconnected": "false"
-    }
-    defaults.update(settings_dict)
-    return defaults
-
-@app.post("/api/settings")
-async def save_settings_api(request: Request):
-    try:
-        payload = await request.json()
-        from app.database import set_setting, log_event
-        for k, v in payload.items():
-            set_setting(k, str(v) if v is not None else "")
-        log_event("Global settings updated.")
-        return {"success": True}
-    except Exception as e:
-        return {"success": False, "error": str(e)}
-
-@app.post("/api/settings/test-telegram")
-async def test_telegram_api(request: Request):
-    try:
-        payload = await request.json()
-        from app.notifier import send_telegram_notification
-        send_telegram_notification(
-            payload.get("notif_type", ""), 
-            payload.get("title", "Test"), 
-            payload.get("description", "Test"), 
-            force=True
-        )
-        return {"success": True}
-    except Exception as e:
-        return {"success": False, "error": str(e)}
-
-from fastapi import Request
-from fastapi.responses import JSONResponse
-
 @app.get("/api/sys_settings")
 def get_sys_settings():
-    from app.database import get_db
     d = {}
     try:
         with get_db() as conn:
@@ -521,7 +368,6 @@ def get_sys_settings():
 @app.post("/api/sys_settings")
 async def post_sys_settings(request: Request):
     payload = await request.json()
-    from app.database import get_db
     try:
         with get_db() as conn:
             for k, v in payload.items():
@@ -545,13 +391,8 @@ async def test_sys_settings(request: Request):
     send_telegram_notification(payload.get("notif_type", ""), force=True, **mock_data)
     return JSONResponse({"success": True})
 
-
-
-
 @app.post("/api/schedules")
 async def create_schedule(request: Request):
-    from app.database import get_db, log_event
-    from app.scheduler import schedule_job
     try:
         data = await request.json()
         stream_id = data.get("stream_id")
@@ -571,7 +412,6 @@ async def create_schedule(request: Request):
             schedule_id = cursor.lastrowid
             conn.commit()
 
-        # Enqueue immediately into the running APScheduler
         schedule_job(schedule_id, stream_id, start_time, end_time, description)
         log_event(f"Created schedule #{schedule_id} for stream {stream_id}")
         return JSONResponse({"success": True, "id": schedule_id})
@@ -581,8 +421,6 @@ async def create_schedule(request: Request):
 
 @app.patch("/api/schedules/{schedule_id}")
 async def update_schedule(schedule_id: int, request: Request):
-    from app.database import get_db, log_event
-    from app.scheduler import schedule_job, remove_scheduled_job
     try:
         data = await request.json()
         stream_id = data.get("stream_id")
@@ -607,8 +445,6 @@ async def update_schedule(schedule_id: int, request: Request):
 
 @app.delete("/api/schedules/{schedule_id}")
 def delete_schedule_api(schedule_id: int):
-    from app.database import get_db, log_event
-    from app.scheduler import remove_scheduled_job
     try:
         with get_db() as conn:
             conn.execute("DELETE FROM schedules WHERE id = ?", (schedule_id,))

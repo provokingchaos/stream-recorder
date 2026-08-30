@@ -71,7 +71,6 @@ class StreamRecorder:
                 stderr=asyncio.subprocess.DEVNULL
             )
             
-            # Send unconditional stream connected notification
             try:
                 send_telegram_notification("notif_stream_connected", stream_label=self.label)
             except Exception:
@@ -83,8 +82,8 @@ class StreamRecorder:
             with get_db() as conn:
                 conn.execute("UPDATE recordings SET status = 'failed' WHERE id = ?", (self.recording_id,))
                 conn.commit()
-            if self.recording_id in active_recordings:
-                del active_recordings[self.recording_id]
+            
+            active_recordings.pop(self.recording_id, None)
             return
 
         asyncio.create_task(self._monitor_process())
@@ -93,13 +92,11 @@ class StreamRecorder:
         if self.process:
             await self.process.wait()
             
-            # Send unconditional stream disconnected notification
             try:
                 send_telegram_notification("notif_stream_disconnected", stream_label=self.label)
             except Exception:
                 pass
 
-            # If this was a scheduled recording completing naturally, dispatch the scheduled stop notification
             if self.duration_minutes and not self.is_stopping:
                 try:
                     desc_text = f" ({self.description})" if self.description else ""
@@ -132,8 +129,7 @@ class StreamRecorder:
 
         log_event(f"Finished recording '{self.label}' (Duration: {duration_seconds}s, Size: {file_size} bytes)")
         
-        if self.recording_id in active_recordings:
-            del active_recordings[self.recording_id]
+        active_recordings.pop(self.recording_id, None)
 
     async def stop(self):
         self.is_stopping = True
