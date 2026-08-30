@@ -127,10 +127,10 @@
                                     <button @click="togglePlay(`/api/recordings/${rec.id}/highlight/play`)"
                                         title="Play Highlight Reel"
                                         class="text-2xl hover:scale-110 transition-transform"
-                                        x-text="globalAudioUrl === `/api/recordings/${rec.id}/highlight/play` ? '⏹️' : '🎬'"></button>
+                                        x-text="globalAudioUrl === `/api/recordings/${rec.id}/highlight/play` ? '⏹️' : '🎙️'"></button>
                                     <a :href="`/api/recordings/${rec.id}/highlight/download`" download
                                         title="Download Highlight Reel"
-                                        class="text-2xl hover:scale-110 transition-transform">📥</a>
+                                        class="text-2xl hover:scale-110 transition-transform">💾</a>
                                 </div>
                             </template>
 
