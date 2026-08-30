@@ -2,6 +2,8 @@ import asyncio
 import os
 import datetime
 import sqlite3
+import urllib.request
+import re
 from typing import Dict, Optional
 from app.database import get_db, log_event
 from app.notifier import send_telegram_notification
@@ -48,13 +50,34 @@ class StreamRecorder:
             )
             conn.commit()
 
+        actual_url = self.stream_url
+        clean_url = actual_url.lower().split('?')[0]
+        
+        if clean_url.endswith('.pls') or clean_url.endswith('.m3u'):
+            try:
+                req = urllib.request.Request(actual_url, headers={'User-Agent': 'Mozilla/5.0'})
+                with urllib.request.urlopen(req, timeout=10) as response:
+                    content = response.read().decode('utf-8', errors='ignore')
+                    if clean_url.endswith('.pls'):
+                        match = re.search(r'^File\d*=(http[^\s]+)', content, re.IGNORECASE | re.MULTILINE)
+                        if match:
+                            actual_url = match.group(1).strip()
+                    else:
+                        for line in content.splitlines():
+                            line = line.strip()
+                            if line.startswith('http'):
+                                actual_url = line
+                                break
+            except Exception as e:
+                log_event(f"Warning: Could not parse playlist file {actual_url} - {e}")
+
         cmd = [
             "ffmpeg",
             "-y",
             "-reconnect", "1",
             "-reconnect_streamed", "1",
             "-reconnect_delay_max", "5",
-            "-i", self.stream_url,
+            "-i", actual_url,
             "-c:a", "libmp3lame",
             "-b:a", "128k"
         ]
