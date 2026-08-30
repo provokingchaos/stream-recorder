@@ -5,6 +5,20 @@ from app.database import get_db, log_event, get_setting
 
 _model = None
 _loaded_model_size = None
+_transcription_sem = None
+_current_transcription_limit = 1
+
+def get_transcription_semaphore():
+    global _transcription_sem, _current_transcription_limit
+    try:
+        limit = int(get_setting("max_concurrent_transcriptions", "1"))
+    except ValueError:
+        limit = 1
+    limit = max(1, limit)
+    if _transcription_sem is None or limit != _current_transcription_limit:
+        _current_transcription_limit = limit
+        _transcription_sem = asyncio.Semaphore(_current_transcription_limit)
+    return _transcription_sem
 
 def force_cache_model(model_size: str):
     from faster_whisper.utils import download_model
@@ -60,7 +74,9 @@ async def transcribe_audio(recording_id: int, filepath: str):
         conn.commit()
     
     transcript_path = filepath.rsplit(".", 1)[0] + ".txt"
-    await asyncio.to_thread(_run_transcription, recording_id, filepath, transcript_path)
+    sem = get_transcription_semaphore()
+    async with sem:
+        await asyncio.to_thread(_run_transcription, recording_id, filepath, transcript_path)
     
     if get_setting("auto_highlight", "false") == "true":
         from app.highlighter import process_highlight_task

@@ -11,3 +11,4 @@ aiofiles>=23.2.1
 faster-whisper==1.0.3
 requests==2.32.3
 llama-cpp-python==0.2.89
+huggingface-hub==0.24.6

@@ -99,7 +99,10 @@ def init_db():
             "notif_stream_disconnected": "false",
             "auto_transcribe": "false",
             "whisper_model": "base.en",
-            "auto_highlight": "false"
+            "auto_highlight": "false",
+            "max_concurrent_transcriptions": "1",
+            "max_concurrent_highlights": "1",
+            "highlight_prompt_file": "highlight_prompt.txt"
         }
         for k, v in default_settings.items():
             conn.execute("INSERT OR IGNORE INTO settings (key, value) VALUES (?, ?)", (k, v))

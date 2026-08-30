@@ -21,7 +21,7 @@ from app.scheduler import init_scheduler, schedule_job, remove_scheduled_job
 from app.sniffer import sniff_stream_url
 from app.recorder import StreamRecorder, active_recordings
 from app.transcriber import transcribe_audio
-from app.highlighter import process_highlight_task
+from app.highlighter import process_highlight_task, get_highlight_prompt, get_prompt_filepath
 
 def rebuild_schedules_schema():
     with get_db() as conn:
@@ -122,9 +122,6 @@ def delete_stream(stream_id: int):
 
 @app.post("/api/record/start")
 async def start_recording(payload: ManualRecordRequest):
-    import datetime
-    from app.notifier import send_telegram_notification
-
     with get_db() as conn:
         stream = conn.execute("SELECT * FROM streams WHERE id = ?", (payload.stream_id,)).fetchone()
         if not stream:
@@ -149,6 +146,7 @@ async def start_recording(payload: ManualRecordRequest):
     active_recordings[recording_id] = recorder
 
     try:
+        from app.notifier import send_telegram_notification
         start_str = datetime.datetime.now().strftime("%I:%M %p")
         send_telegram_notification(
             "notif_manual_start",
@@ -425,12 +423,7 @@ def get_sys_settings():
                 d[row[0]] = row[1]
     except Exception: pass
     
-    # Read the text file for the highlight prompt to map perfectly to UI
-    prompt_text = ""
-    prompt_path = "/config/highlight_prompt.txt"
-    if os.path.exists(prompt_path):
-        with open(prompt_path, "r", encoding="utf-8") as f:
-            prompt_text = f.read().strip()
+    prompt_text = get_highlight_prompt()
             
     return {
         "recordings_dir": d.get("recordings_dir", "/recordings"),
@@ -445,6 +438,9 @@ def get_sys_settings():
         "auto_transcribe": d.get("auto_transcribe", "false"),
         "auto_highlight": d.get("auto_highlight", "false"),
         "whisper_model": d.get("whisper_model", "base.en"),
+        "max_concurrent_transcriptions": d.get("max_concurrent_transcriptions", "1"),
+        "max_concurrent_highlights": d.get("max_concurrent_highlights", "1"),
+        "highlight_prompt_file": d.get("highlight_prompt_file", "highlight_prompt.txt"),
         "highlight_prompt": prompt_text
     }
 
@@ -452,14 +448,21 @@ def get_sys_settings():
 async def post_sys_settings(request: Request):
     payload = await request.json()
     try:
-        if "highlight_prompt" in payload:
-            with open("/config/highlight_prompt.txt", "w", encoding="utf-8") as f:
-                f.write(payload.pop("highlight_prompt"))
+        prompt_content = payload.pop("highlight_prompt", None)
+        prompt_file = payload.get("highlight_prompt_file", None)
 
         with get_db() as conn:
             for k, v in payload.items():
                 conn.execute("INSERT OR REPLACE INTO settings (key, value) VALUES (?, ?)", (str(k), str(v)))
             conn.commit()
+
+        if prompt_content is not None:
+            config_dir = os.getenv("CONFIG_DIR", "/config")
+            target_filename = os.path.basename((prompt_file or get_setting("highlight_prompt_file", "highlight_prompt.txt")).strip() or "highlight_prompt.txt")
+            target_path = os.path.join(config_dir, target_filename)
+            with open(target_path, "w", encoding="utf-8") as f:
+                f.write(prompt_content)
+
         return JSONResponse({"success": True})
     except Exception as e:
         return JSONResponse({"success": False, "error": str(e)})
