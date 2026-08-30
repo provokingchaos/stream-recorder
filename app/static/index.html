@@ -21,7 +21,7 @@
             </button>
         </div>
 
-        <!-- Navigation Tabs: Wraps naturally on small screens -->
+        <!-- Navigation Tabs -->
         <div class="flex flex-wrap gap-2 mb-6 border-b border-gray-300 dark:border-gray-700 pb-2">
             <button @click="activeTab = 'dashboard'"
                 :class="activeTab === 'dashboard' ? 'bg-blue-100 dark:bg-blue-900/50 text-blue-700 dark:text-blue-400' : 'text-gray-600 dark:text-gray-400 hover:bg-gray-200 dark:hover:bg-gray-800'"
@@ -273,6 +273,7 @@
 
         <!-- Settings -->
         <div x-show="activeTab === 'settings'" x-cloak class="space-y-6">
+
             <div
                 class="bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-lg shadow p-4 sm:p-6 flex flex-col sm:flex-row justify-between items-center gap-4">
                 <div class="text-center sm:text-left">
@@ -287,34 +288,17 @@
             </div>
 
             <div class="grid grid-cols-1 lg:grid-cols-2 gap-6 items-start">
-                <div class="space-y-6">
-                    <div
-                        class="bg-white dark:bg-gray-800 rounded-lg shadow p-4 sm:p-6 border border-gray-200 dark:border-gray-700">
-                        <h2 class="text-xl font-bold mb-4 border-b dark:border-gray-700 pb-2">General Engine Settings
-                        </h2>
-                        <div class="space-y-4">
-                            <div>
-                                <label class="block text-sm font-medium mb-1">Recordings Directory</label>
-                                <input type="text" x-model="settings.recordings_dir"
-                                    class="w-full px-3 py-2 border dark:border-gray-600 bg-gray-50 dark:bg-gray-700 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none">
-                                <p class="text-xs text-gray-500 dark:text-gray-400 mt-2">The internal folder path where
-                                    MP3 files are written.</p>
-                            </div>
+                <div
+                    class="bg-white dark:bg-gray-800 rounded-lg shadow p-4 sm:p-6 border border-gray-200 dark:border-gray-700">
+                    <h2 class="text-xl font-bold mb-4 border-b dark:border-gray-700 pb-2">General Engine Settings</h2>
+                    <div class="space-y-4">
+                        <div>
+                            <label class="block text-sm font-medium mb-1">Recordings Directory</label>
+                            <input type="text" x-model="settings.recordings_dir"
+                                class="w-full px-3 py-2 border dark:border-gray-600 bg-gray-50 dark:bg-gray-700 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none">
+                            <p class="text-xs text-gray-500 dark:text-gray-400 mt-2">The internal folder path where MP3
+                                files are written.</p>
                         </div>
-                    </div>
-
-                    <div class="bg-white dark:bg-gray-800 rounded-lg shadow p-4 sm:p-6 border-t-4 border-red-600">
-                        <h2 class="text-xl font-bold mb-2 text-red-600 flex items-center gap-2">⚠️ Danger Zone</h2>
-                        <p class="text-sm text-gray-600 dark:text-gray-400 mb-5">
-                            Need to start from scratch? This will wipe your database tables (streams, schedules,
-                            settings, and recording histories).
-                            Your physical audio files will remain safe on your drive, but the application engine will be
-                            factory reset.
-                        </p>
-                        <button @click="purgeDatabase()"
-                            class="px-6 py-3 bg-red-600 text-white font-bold rounded-lg hover:bg-red-700 transition-colors shadow-sm w-full sm:w-auto">
-                            Factory Reset & Purge Data
-                        </button>
                     </div>
                 </div>
 
@@ -420,6 +404,20 @@
                         </div>
                     </div>
                 </div>
+            </div>
+
+            <div class="bg-white dark:bg-gray-800 rounded-lg shadow p-4 sm:p-6 border-t-4 border-red-600">
+                <h2 class="text-xl font-bold mb-2 text-red-600 flex items-center gap-2">⚠️ Danger Zone</h2>
+                <p class="text-sm text-gray-600 dark:text-gray-400 mb-5">
+                    Need to start from scratch? This will wipe your database tables (streams, schedules, settings, and
+                    recording histories).
+                    Your physical audio files will remain safe on your drive, but the application engine will be factory
+                    reset.
+                </p>
+                <button @click="purgeDatabase()"
+                    class="px-6 py-3 bg-red-600 text-white font-bold rounded-lg hover:bg-red-700 transition-colors shadow-sm w-full sm:w-auto">
+                    Factory Reset & Purge Data
+                </button>
             </div>
         </div>
 
