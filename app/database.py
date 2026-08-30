@@ -33,11 +33,22 @@ def init_db():
                 status TEXT DEFAULT 'pending',
                 duration_seconds INTEGER DEFAULT 0,
                 file_size_bytes INTEGER DEFAULT 0,
+                start_time TEXT,
+                end_time TEXT,
                 started_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
                 ended_at TIMESTAMP,
                 FOREIGN KEY(stream_id) REFERENCES streams(id) ON DELETE CASCADE
             )
         """)
+
+        cursor = conn.cursor()
+        cursor.execute("PRAGMA table_info(recordings)")
+        columns = [col[1] for col in cursor.fetchall()]
+        
+        if "start_time" not in columns:
+            cursor.execute("ALTER TABLE recordings ADD COLUMN start_time TEXT")
+        if "end_time" not in columns:
+            cursor.execute("ALTER TABLE recordings ADD COLUMN end_time TEXT")
         
         conn.execute("""
             CREATE TABLE IF NOT EXISTS schedules (
@@ -69,7 +80,6 @@ def set_setting(key: str, value: str):
         conn.execute("INSERT OR REPLACE INTO settings (key, value) VALUES (?, ?)", (key, value))
         conn.commit()
 
-
 def log_event(message: str):
     try:
         with get_db() as conn:
@@ -79,11 +89,9 @@ def log_event(message: str):
     except Exception as e:
         print(f"[LOG ERROR] {e}: {message}", flush=True)
 
-
 def recover_interrupted_recordings():
     try:
         with get_db() as conn:
-            # Mark any lingering 'recording' statuses as 'failed' after a server restart
             conn.execute("UPDATE recordings SET status = 'failed' WHERE status = 'recording'")
             conn.commit()
             log_event("System startup: Cleaned up any interrupted recording states.")
