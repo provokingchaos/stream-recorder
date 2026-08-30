@@ -117,14 +117,48 @@ def delete_stream(stream_id: int):
 # Schedules API
 @app.post("/api/record/start")
 async def start_recording(payload: ManualRecordRequest):
+    import datetime
+    from app.notifier import send_telegram_notification
+
     with get_db() as conn:
         stream = conn.execute("SELECT * FROM streams WHERE id = ?", (payload.stream_id,)).fetchone()
         if not stream:
             raise HTTPException(status_code=404, detail="Stream not found")
+        
+        # 1. Create a database record FIRST to generate a valid recording_id
+        cursor = conn.cursor()
+        now_dt = datetime.datetime.now()
+        cursor.execute(
+            "INSERT INTO recordings (stream_id, filename, filepath, status, start_time) VALUES (?, '', '', 'pending', ?)",
+            (payload.stream_id, now_dt.isoformat())
+        )
+        recording_id = cursor.lastrowid
+        conn.commit()
     
-    recorder = StreamRecorder(stream["id"], stream["label"], stream["stream_url"], None)
+    # 2. Instantiate with explicitly named arguments to prevent mismatches
+    recorder = StreamRecorder(
+        recording_id=recording_id,
+        stream_id=stream["id"],
+        stream_url=stream["stream_url"],
+        label=stream["label"]
+    )
+    
+    # 3. Add to the active dictionary so the "Stop" button works
+    active_recordings[recording_id] = recorder
+
+    # 4. Dispatch Telegram notification
+    try:
+        start_str = datetime.datetime.now().strftime("%I:%M %p")
+        send_telegram_notification(
+            "notif_manual_start",
+            stream_label=stream["label"],
+            start_str=start_str
+        )
+    except Exception:
+        pass
+
     await recorder.start()
-    return {"success": True, "recording_id": recorder.db_id}
+    return {"success": True, "recording_id": recording_id}
 
 @app.post("/api/record/stop/{recording_id}")
 async def stop_recording(recording_id: int):
@@ -284,65 +318,6 @@ def purge_database():
         return {"success": True}
     except Exception as e:
         return {"success": False, "error": str(e)}
-
-async def start_recording_job(stream_id: int, duration_minutes: int = None, description: str = ""):
-    from app.notifier import send_telegram_notification
-
-    try:
-        with get_db() as conn:
-            stream = conn.execute("SELECT id, stream_url, label FROM streams WHERE id = ?", (stream_id,)).fetchone()
-            if not stream:
-                log_event(f"Scheduled recording failed: Stream {stream_id} not found.")
-                return
-
-            stream_url = stream["stream_url"] if hasattr(stream, "keys") and "stream_url" in stream.keys() else stream[1]
-            stream_label = stream["label"] if hasattr(stream, "keys") and "label" in stream.keys() else stream[2]
-
-            row = conn.execute("SELECT value FROM settings WHERE key = 'recordings_dir'").fetchone()
-            rec_dir = (row[0] if row else "/recordings") or "/recordings"
-
-            cursor = conn.cursor()
-            now_dt = datetime.datetime.now()
-            timestamp = now_dt.strftime("%Y-%m-%d_%H-%M-%S")
-            safe_label = "".join(c for c in str(stream_label) if c.isalnum() or c in (" ", "_", "-")).rstrip().replace(" ", "_") or f"stream_{stream_id}"
-            initial_filename = f"{safe_label}_{timestamp}.mp3"
-            initial_filepath = f"{rec_dir.rstrip('/')}/{initial_filename}"
-
-            cursor.execute(
-                "INSERT INTO recordings (stream_id, filename, filepath, status, start_time) VALUES (?, ?, ?, 'recording', ?)",
-                (stream_id, initial_filename, initial_filepath, now_dt.isoformat())
-            )
-            recording_id = cursor.lastrowid
-            conn.commit()
-
-        recorder = StreamRecorder(
-            recording_id=recording_id,
-            stream_id=stream_id,
-            stream_url=stream_url,
-            label=stream_label,
-            duration_minutes=duration_minutes,
-            description=description
-        )
-        active_recordings[recording_id] = recorder
-
-        try:
-            desc_text = f" ({description})" if description else ""
-            start_str = datetime.datetime.now().strftime("%I:%M %p")
-            end_time_dt = datetime.datetime.now() + datetime.timedelta(minutes=(duration_minutes or 60))
-            end_str = end_time_dt.strftime("%I:%M %p")
-            send_telegram_notification(
-                "notif_sched_start",
-                stream_label=stream_label,
-                desc_text=desc_text,
-                start_str=start_str,
-                end_str=end_str
-            )
-        except Exception:
-            pass
-
-        await recorder.start()
-    except Exception as e:
-        log_event(f"Error in start_recording_job: {e}")
 
 @app.get("/api/sys_settings")
 def get_sys_settings():
