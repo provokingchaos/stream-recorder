@@ -83,16 +83,33 @@
                                         class="px-2 py-1 text-xs font-bold rounded-full bg-orange-100 text-orange-800 dark:bg-orange-900 dark:text-orange-200">TRANSCRIPT
                                         FAILED</span>
                                 </template>
+
+                                <!-- Highlight Badges -->
+                                <template x-if="rec.highlight_status === 'processing'">
+                                    <span
+                                        class="px-2 py-1 text-xs font-bold rounded-full bg-purple-100 text-purple-800 dark:bg-purple-900 dark:text-purple-200 animate-pulse"
+                                        x-text="`Generating Highlight Reel... ${rec.highlight_progress || 0}%`"></span>
+                                </template>
+                                <template x-if="rec.highlight_status === 'failed'">
+                                    <span
+                                        class="px-2 py-1 text-xs font-bold rounded-full bg-orange-100 text-orange-800 dark:bg-orange-900 dark:text-orange-200">HIGHLIGHT
+                                        FAILED</span>
+                                </template>
+                                <template x-if="rec.highlight_status === 'completed' && !rec.highlight_path">
+                                    <span
+                                        class="px-2 py-1 text-xs font-bold rounded-full bg-gray-100 text-gray-600 dark:bg-gray-700 dark:text-gray-400">0
+                                        HIGHLIGHTS</span>
+                                </template>
                             </div>
                         </div>
 
                         <!-- Actions -->
                         <div
-                            class="flex items-center gap-3 border-t md:border-t-0 md:border-l border-gray-200 dark:border-gray-700 pt-4 md:pt-0 md:pl-6 justify-end">
+                            class="flex flex-wrap items-center gap-3 border-t md:border-t-0 md:border-l border-gray-200 dark:border-gray-700 pt-4 md:pt-0 md:pl-6 justify-end">
                             <template x-if="rec.status === 'completed'">
                                 <div class="flex items-center gap-3 mr-2">
                                     <button @click="togglePlay(`/api/recordings/${rec.id}/play`)"
-                                        title="Toggle Playback" class="text-2xl hover:scale-110 transition-transform"
+                                        title="Play Full Audio" class="text-2xl hover:scale-110 transition-transform"
                                         x-text="globalAudioUrl === `/api/recordings/${rec.id}/play` ? '⏹️' : '▶️'"></button>
                                     <a :href="`/api/recordings/${rec.id}/download`" download title="Download MP3"
                                         class="text-2xl hover:scale-110 transition-transform">⬇️</a>
@@ -105,19 +122,40 @@
                                 </div>
                             </template>
 
+                            <template x-if="rec.highlight_status === 'completed' && rec.highlight_path">
+                                <div class="flex items-center gap-3 mr-2 border-l pl-3 dark:border-gray-600">
+                                    <button @click="togglePlay(`/api/recordings/${rec.id}/highlight/play`)"
+                                        title="Play Highlight Reel"
+                                        class="text-2xl hover:scale-110 transition-transform"
+                                        x-text="globalAudioUrl === `/api/recordings/${rec.id}/highlight/play` ? '⏹️' : '🎬'"></button>
+                                    <a :href="`/api/recordings/${rec.id}/highlight/download`" download
+                                        title="Download Highlight Reel"
+                                        class="text-2xl hover:scale-110 transition-transform">📥</a>
+                                </div>
+                            </template>
+
                             <template x-if="rec.status === 'recording'">
                                 <button @click="stopRecording(rec.id)"
                                     class="px-4 py-2 bg-red-100 dark:bg-red-900/50 text-red-700 dark:text-red-400 hover:bg-red-200 dark:hover:bg-red-900 rounded-lg font-semibold text-sm transition-colors">Stop</button>
                             </template>
 
-                            <template
-                                x-if="rec.status === 'completed' && (rec.transcription_status === 'none' || rec.transcription_status === 'failed')">
-                                <button @click="startTranscription(rec.id)"
-                                    class="px-4 py-2 bg-blue-100 dark:bg-blue-900/50 text-blue-700 dark:text-blue-400 hover:bg-blue-200 dark:hover:bg-blue-900/70 rounded-lg font-semibold text-sm transition-colors">Transcribe</button>
-                            </template>
+                            <div class="flex flex-col gap-2">
+                                <template
+                                    x-if="rec.status === 'completed' && (rec.transcription_status === 'none' || rec.transcription_status === 'failed')">
+                                    <button @click="startTranscription(rec.id)"
+                                        class="px-4 py-2 bg-blue-100 dark:bg-blue-900/50 text-blue-700 dark:text-blue-400 hover:bg-blue-200 dark:hover:bg-blue-900/70 rounded-lg font-semibold text-sm transition-colors">Transcribe</button>
+                                </template>
+
+                                <template
+                                    x-if="rec.status === 'completed' && rec.transcription_status === 'completed' && (rec.highlight_status === 'none' || rec.highlight_status === 'failed')">
+                                    <button @click="startHighlight(rec.id)"
+                                        class="px-4 py-2 bg-purple-100 dark:bg-purple-900/50 text-purple-700 dark:text-purple-400 hover:bg-purple-200 dark:hover:bg-purple-900/70 rounded-lg font-semibold text-sm transition-colors">Create
+                                        Highlight</button>
+                                </template>
+                            </div>
 
                             <button @click="deleteRecording(rec.id)"
-                                class="px-4 py-2 bg-gray-100 dark:bg-gray-700 text-red-600 dark:text-red-400 hover:bg-gray-200 dark:hover:bg-gray-600 rounded-lg font-semibold text-sm transition-colors">Delete</button>
+                                class="px-4 py-2 bg-gray-100 dark:bg-gray-700 text-red-600 dark:text-red-400 hover:bg-gray-200 dark:hover:bg-gray-600 rounded-lg font-semibold text-sm transition-colors ml-2">Delete</button>
                         </div>
                     </div>
                 </template>
@@ -371,10 +409,11 @@
                                 files are written.</p>
                         </div>
 
-                        <div
-                            class="flex items-center justify-between bg-gray-50 dark:bg-gray-700/50 p-3 rounded-lg border dark:border-gray-600 gap-3">
-                            <label class="flex items-center gap-3 cursor-pointer">
+                        <div class="flex flex-col gap-3 pt-2">
+                            <label
+                                class="flex items-center gap-3 cursor-pointer bg-gray-50 dark:bg-gray-700/50 p-3 rounded-lg border dark:border-gray-600">
                                 <input type="checkbox" x-model="settings.auto_transcribe"
+                                    @change="if(!settings.auto_transcribe) settings.auto_highlight = false"
                                     class="w-5 h-5 text-blue-600 rounded bg-white dark:bg-gray-800 border-gray-300 dark:border-gray-600 focus:ring-blue-500 focus:ring-2">
                                 <div>
                                     <span class="text-sm font-semibold block">Automatic Transcription</span>
@@ -382,6 +421,30 @@
                                         immediately after recording finishes.</span>
                                 </div>
                             </label>
+
+                            <label
+                                class="flex items-center gap-3 cursor-pointer bg-gray-50 dark:bg-gray-700/50 p-3 rounded-lg border dark:border-gray-600 transition-opacity"
+                                :class="!settings.auto_transcribe ? 'opacity-50' : ''">
+                                <input type="checkbox" x-model="settings.auto_highlight"
+                                    :disabled="!settings.auto_transcribe"
+                                    class="w-5 h-5 text-purple-600 rounded bg-white dark:bg-gray-800 border-gray-300 dark:border-gray-600 focus:ring-purple-500 focus:ring-2 disabled:cursor-not-allowed">
+                                <div>
+                                    <span
+                                        class="text-sm font-semibold block text-purple-800 dark:text-purple-300">Automatic
+                                        AI Highlight Reel</span>
+                                    <span class="text-xs text-gray-500 dark:text-gray-400">Read the transcript and slice
+                                        out audio segments automatically.</span>
+                                </div>
+                            </label>
+                        </div>
+
+                        <div class="border-t dark:border-gray-700 pt-4">
+                            <label class="block text-sm font-medium mb-2">AI Extraction Prompt
+                                (highlight_prompt.txt)</label>
+                            <textarea x-model="settings.highlight_prompt" rows="3"
+                                class="w-full px-3 py-2 border dark:border-gray-600 bg-gray-50 dark:bg-gray-700 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none text-sm font-mono"></textarea>
+                            <p class="text-xs text-gray-500 dark:text-gray-400 mt-2">Instruct the AI exactly what to
+                                search for in the transcript.</p>
                         </div>
 
                         <div class="border-t dark:border-gray-700 pt-4">
@@ -583,7 +646,7 @@
                     recordings_dir: '/recordings', telegram_token: '', telegram_chat_id: '',
                     notif_manual_start: false, notif_manual_stop: false, notif_sched_start: false,
                     notif_sched_stop: false, notif_stream_connected: false, notif_stream_disconnected: false,
-                    auto_transcribe: false, whisper_model: 'base.en'
+                    auto_transcribe: false, auto_highlight: false, whisper_model: 'base.en', highlight_prompt: ''
                 },
                 appLogs: 'Loading logs...',
                 isProbing: false,
@@ -637,7 +700,9 @@
                             notif_stream_connected: d.notif_stream_connected === 'true',
                             notif_stream_disconnected: d.notif_stream_disconnected === 'true',
                             auto_transcribe: d.auto_transcribe === 'true',
-                            whisper_model: d.whisper_model || 'base.en'
+                            auto_highlight: d.auto_highlight === 'true',
+                            whisper_model: d.whisper_model || 'base.en',
+                            highlight_prompt: d.highlight_prompt || ''
                         });
                     });
                 },
@@ -651,6 +716,7 @@
                     payload.notif_stream_connected = payload.notif_stream_connected ? 'true' : 'false';
                     payload.notif_stream_disconnected = payload.notif_stream_disconnected ? 'true' : 'false';
                     payload.auto_transcribe = payload.auto_transcribe ? 'true' : 'false';
+                    payload.auto_highlight = payload.auto_highlight ? 'true' : 'false';
                     payload.whisper_model = payload.whisper_model || 'base.en';
 
                     fetch('/api/sys_settings', {
@@ -771,6 +837,10 @@
 
                 startTranscription(id) {
                     fetch(`/api/recordings/${id}/transcribe`, { method: 'POST' }).then(() => this.fetchRecordings());
+                },
+
+                startHighlight(id) {
+                    fetch(`/api/recordings/${id}/highlight`, { method: 'POST' }).then(() => this.fetchRecordings());
                 },
 
                 saveSchedule() {

@@ -60,6 +60,13 @@ def init_db():
             cursor.execute("ALTER TABLE recordings ADD COLUMN transcript_path TEXT")
         if "transcription_progress" not in columns:
             cursor.execute("ALTER TABLE recordings ADD COLUMN transcription_progress INTEGER DEFAULT 0")
+            
+        if "highlight_status" not in columns:
+            cursor.execute("ALTER TABLE recordings ADD COLUMN highlight_status TEXT DEFAULT 'none'")
+        if "highlight_progress" not in columns:
+            cursor.execute("ALTER TABLE recordings ADD COLUMN highlight_progress INTEGER DEFAULT 0")
+        if "highlight_path" not in columns:
+            cursor.execute("ALTER TABLE recordings ADD COLUMN highlight_path TEXT")
         
         conn.execute("""
             CREATE TABLE IF NOT EXISTS schedules (
@@ -91,7 +98,8 @@ def init_db():
             "notif_stream_connected": "false",
             "notif_stream_disconnected": "false",
             "auto_transcribe": "false",
-            "whisper_model": "base.en"
+            "whisper_model": "base.en",
+            "auto_highlight": "false"
         }
         for k, v in default_settings.items():
             conn.execute("INSERT OR IGNORE INTO settings (key, value) VALUES (?, ?)", (k, v))
@@ -125,6 +133,7 @@ def recover_interrupted_recordings():
         with get_db() as conn:
             conn.execute("UPDATE recordings SET status = 'failed' WHERE status = 'recording'")
             conn.execute("UPDATE recordings SET transcription_status = 'failed', transcription_progress = 0 WHERE transcription_status = 'processing'")
+            conn.execute("UPDATE recordings SET highlight_status = 'failed', highlight_progress = 0 WHERE highlight_status = 'processing'")
             conn.commit()
             log_event("System startup: Cleaned up interrupted recording and transcription states.")
     except Exception:

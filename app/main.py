@@ -21,6 +21,7 @@ from app.scheduler import init_scheduler, schedule_job, remove_scheduled_job
 from app.sniffer import sniff_stream_url
 from app.recorder import StreamRecorder, active_recordings
 from app.transcriber import transcribe_audio
+from app.highlighter import process_highlight_task
 
 def rebuild_schedules_schema():
     with get_db() as conn:
@@ -184,6 +185,22 @@ async def trigger_transcription(rec_id: int):
     asyncio.create_task(transcribe_audio(rec_id, str(file_path)))
     return {"success": True}
 
+@app.post("/api/recordings/{rec_id}/highlight")
+async def trigger_highlight(rec_id: int):
+    with get_db() as conn:
+        rec = conn.execute("SELECT filepath, filename, transcript_path, transcription_status FROM recordings WHERE id = ?", (rec_id,)).fetchone()
+    
+    if not rec or rec["transcription_status"] != "completed" or not rec["transcript_path"]:
+        raise HTTPException(status_code=400, detail="Transcript is required before generating highlights.")
+        
+    file_path = resolve_recording_path(dict(rec))
+    if not file_path:
+        raise HTTPException(status_code=404, detail="Recording file not found on disk.")
+        
+    import asyncio
+    asyncio.create_task(process_highlight_task(rec_id, str(file_path), rec["transcript_path"]))
+    return {"success": True}
+
 @app.get("/api/recordings")
 def get_recordings_api():
     results = []
@@ -194,19 +211,17 @@ def get_recordings_api():
 
             rows = conn.execute("""
                 SELECT 
-                    r.id, 
-                    r.stream_id, 
-                    r.filename, 
-                    r.filepath,
+                    r.id, r.stream_id, r.filename, r.filepath,
                     COALESCE(r.start_time, r.started_at, '') AS start_time, 
                     COALESCE(r.end_time, r.ended_at, '') AS end_time, 
                     COALESCE(r.duration_seconds, 0) AS duration_seconds, 
                     COALESCE(r.file_size_bytes, 0) AS file_size_bytes, 
-                    r.status, 
-                    COALESCE(s.label, 'Unknown Stream') AS stream_label,
+                    r.status, COALESCE(s.label, 'Unknown Stream') AS stream_label,
                     COALESCE(r.transcription_status, 'none') AS transcription_status,
-                    r.transcript_path,
-                    COALESCE(r.transcription_progress, 0) AS transcription_progress
+                    r.transcript_path, COALESCE(r.transcription_progress, 0) AS transcription_progress,
+                    COALESCE(r.highlight_status, 'none') AS highlight_status,
+                    COALESCE(r.highlight_progress, 0) AS highlight_progress,
+                    r.highlight_path
                 FROM recordings r
                 LEFT JOIN streams s ON r.stream_id = s.id
                 ORDER BY r.id DESC
@@ -229,6 +244,9 @@ def get_recordings_api():
                 trans_status = r[10]
                 trans_path = r[11]
                 trans_prog = r[12]
+                hl_status = r[13]
+                hl_prog = r[14]
+                hl_path = r[15]
 
                 if status == "completed":
                     file_exists = False
@@ -241,10 +259,12 @@ def get_recordings_api():
                     
                     if not file_exists:
                         if trans_path and os.path.exists(trans_path):
-                            try:
-                                os.remove(trans_path)
-                            except OSError:
-                                pass
+                            try: os.remove(trans_path)
+                            except: pass
+                        if hl_path and os.path.exists(hl_path):
+                            try: os.remove(hl_path)
+                            except: pass
+                            
                         conn.execute("DELETE FROM recordings WHERE id = ?", (rec_id,))
                         deleted_any = True
                         continue
@@ -276,7 +296,10 @@ def get_recordings_api():
                     "stream_label": stream_label,
                     "transcription_status": trans_status,
                     "transcript_path": trans_path,
-                    "transcription_progress": trans_prog
+                    "transcription_progress": trans_prog,
+                    "highlight_status": hl_status,
+                    "highlight_progress": hl_prog,
+                    "highlight_path": hl_path
                 })
             
             if deleted_any:
@@ -292,19 +315,18 @@ async def delete_recording(rec_id: int):
         active_recordings.pop(rec_id, None)
 
     with get_db() as conn:
-        rec = conn.execute("SELECT filepath, filename, transcript_path FROM recordings WHERE id = ?", (rec_id,)).fetchone()
+        rec = conn.execute("SELECT filepath, filename, transcript_path, highlight_path FROM recordings WHERE id = ?", (rec_id,)).fetchone()
         if rec:
             file_path = resolve_recording_path(dict(rec))
             if file_path and file_path.exists():
-                try:
-                    os.remove(file_path)
-                except OSError:
-                    pass
+                try: os.remove(file_path)
+                except: pass
             if rec["transcript_path"] and os.path.exists(rec["transcript_path"]):
-                try:
-                    os.remove(rec["transcript_path"])
-                except OSError:
-                    pass
+                try: os.remove(rec["transcript_path"])
+                except: pass
+            if rec["highlight_path"] and os.path.exists(rec["highlight_path"]):
+                try: os.remove(rec["highlight_path"])
+                except: pass
         conn.execute("DELETE FROM recordings WHERE id = ?", (rec_id,))
         conn.commit()
     return {"success": True}
@@ -324,41 +346,44 @@ def get_logs():
 def play_recording(rec_id: int):
     with get_db() as conn:
         rec = conn.execute("SELECT filepath, filename FROM recordings WHERE id = ?", (rec_id,)).fetchone()
-        
-    if not rec:
-        raise HTTPException(status_code=404, detail="Recording record not found in database.")
-
+    if not rec: raise HTTPException(status_code=404)
     file_path = resolve_recording_path(dict(rec))
-    if file_path:
-        return FileResponse(path=str(file_path), media_type="audio/mpeg")
-        
-    raise HTTPException(status_code=404, detail="Recording file not found on disk.")
+    if file_path: return FileResponse(path=str(file_path), media_type="audio/mpeg")
+    raise HTTPException(status_code=404)
 
 @app.get("/api/recordings/{rec_id}/download")
 def download_recording(rec_id: int):
     with get_db() as conn:
         rec = conn.execute("SELECT filepath, filename FROM recordings WHERE id = ?", (rec_id,)).fetchone()
-        
-    if not rec:
-        raise HTTPException(status_code=404, detail="Recording record not found in database.")
-
+    if not rec: raise HTTPException(status_code=404)
     file_path = resolve_recording_path(dict(rec))
     if file_path:
         download_name = rec["filename"] or file_path.name
         return FileResponse(path=str(file_path), media_type="audio/mpeg", filename=download_name)
-        
-    raise HTTPException(status_code=404, detail="Recording file not found on disk.")
+    raise HTTPException(status_code=404)
 
 @app.get("/api/recordings/{rec_id}/transcript")
 def download_transcript(rec_id: int):
     with get_db() as conn:
         rec = conn.execute("SELECT transcript_path, filename FROM recordings WHERE id = ?", (rec_id,)).fetchone()
-        
-    if not rec or not rec["transcript_path"] or not os.path.exists(rec["transcript_path"]):
-        raise HTTPException(status_code=404, detail="Transcript file not found on disk.")
-
+    if not rec or not rec["transcript_path"] or not os.path.exists(rec["transcript_path"]): raise HTTPException(status_code=404)
     download_name = (rec["filename"] or "transcript").rsplit(".", 1)[0] + ".txt"
     return FileResponse(path=rec["transcript_path"], media_type="text/plain", filename=download_name)
+
+@app.get("/api/recordings/{rec_id}/highlight/play")
+def play_highlight(rec_id: int):
+    with get_db() as conn:
+        rec = conn.execute("SELECT highlight_path FROM recordings WHERE id = ?", (rec_id,)).fetchone()
+    if not rec or not rec["highlight_path"] or not os.path.exists(rec["highlight_path"]): raise HTTPException(status_code=404)
+    return FileResponse(path=rec["highlight_path"], media_type="audio/mpeg")
+
+@app.get("/api/recordings/{rec_id}/highlight/download")
+def download_highlight(rec_id: int):
+    with get_db() as conn:
+        rec = conn.execute("SELECT highlight_path, filename FROM recordings WHERE id = ?", (rec_id,)).fetchone()
+    if not rec or not rec["highlight_path"] or not os.path.exists(rec["highlight_path"]): raise HTTPException(status_code=404)
+    download_name = (rec["filename"] or "audio").rsplit(".", 1)[0] + "_highlight.mp3"
+    return FileResponse(path=rec["highlight_path"], media_type="audio/mpeg", filename=download_name)
 
 @app.get("/api/schedules")
 def get_schedules():
@@ -371,8 +396,7 @@ def get_schedules():
                 ORDER BY s.id DESC
             ''').fetchall()
             return [dict(r) for r in schedules]
-        except Exception as e:
-            return []
+        except Exception: return []
 
 @app.post("/api/purge")
 def purge_database():
@@ -383,12 +407,10 @@ def purge_database():
             conn.execute("DELETE FROM schedules")
             conn.execute("DELETE FROM settings")
             conn.commit()
-            
         try:
             from app.scheduler import scheduler
             scheduler.remove_all_jobs()
         except: pass
-        
         log_event("SYSTEM PURGE: Database factory reset executed by user.")
         return {"success": True}
     except Exception as e:
@@ -403,6 +425,13 @@ def get_sys_settings():
                 d[row[0]] = row[1]
     except Exception: pass
     
+    # Read the text file for the highlight prompt to map perfectly to UI
+    prompt_text = ""
+    prompt_path = "/config/highlight_prompt.txt"
+    if os.path.exists(prompt_path):
+        with open(prompt_path, "r", encoding="utf-8") as f:
+            prompt_text = f.read().strip()
+            
     return {
         "recordings_dir": d.get("recordings_dir", "/recordings"),
         "telegram_token": d.get("telegram_token", ""),
@@ -414,13 +443,19 @@ def get_sys_settings():
         "notif_stream_connected": d.get("notif_stream_connected", "false"),
         "notif_stream_disconnected": d.get("notif_stream_disconnected", "false"),
         "auto_transcribe": d.get("auto_transcribe", "false"),
-        "whisper_model": d.get("whisper_model", "base.en")
+        "auto_highlight": d.get("auto_highlight", "false"),
+        "whisper_model": d.get("whisper_model", "base.en"),
+        "highlight_prompt": prompt_text
     }
 
 @app.post("/api/sys_settings")
 async def post_sys_settings(request: Request):
     payload = await request.json()
     try:
+        if "highlight_prompt" in payload:
+            with open("/config/highlight_prompt.txt", "w", encoding="utf-8") as f:
+                f.write(payload.pop("highlight_prompt"))
+
         with get_db() as conn:
             for k, v in payload.items():
                 conn.execute("INSERT OR REPLACE INTO settings (key, value) VALUES (?, ?)", (str(k), str(v)))

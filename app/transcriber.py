@@ -7,7 +7,6 @@ _model = None
 _loaded_model_size = None
 
 def force_cache_model(model_size: str):
-    """Forces the huggingface_hub to download and verify the model cache."""
     from faster_whisper.utils import download_model
     config_dir = os.getenv("CONFIG_DIR", "/config")
     model_dir = os.path.join(config_dir, "models")
@@ -34,15 +33,11 @@ def _run_transcription(recording_id: int, filepath: str, transcript_path: str):
             for segment in segments:
                 f.write(f"[{segment.start:.2f}s -> {segment.end:.2f}s] {segment.text}\n")
                 
-                # Calculate progress up to 99% during iteration
                 pct = min(99, max(0, int((segment.end / total_duration) * 100)))
                 if pct > last_pct:
                     last_pct = pct
                     with get_db() as conn:
-                        conn.execute(
-                            "UPDATE recordings SET transcription_progress = ? WHERE id = ?",
-                            (pct, recording_id)
-                        )
+                        conn.execute("UPDATE recordings SET transcription_progress = ? WHERE id = ?", (pct, recording_id))
                         conn.commit()
         
         with get_db() as conn:
@@ -55,21 +50,18 @@ def _run_transcription(recording_id: int, filepath: str, transcript_path: str):
         log_event(f"Transcription completed for recording #{recording_id} using {model_size}")
     except Exception as e:
         with get_db() as conn:
-            conn.execute(
-                "UPDATE recordings SET transcription_status = 'failed', transcription_progress = 0 WHERE id = ?",
-                (recording_id,)
-            )
+            conn.execute("UPDATE recordings SET transcription_status = 'failed', transcription_progress = 0 WHERE id = ?", (recording_id,))
             conn.commit()
         log_event(f"Transcription failed for recording #{recording_id}: {e}")
 
 async def transcribe_audio(recording_id: int, filepath: str):
-    """Dispatches the CPU-heavy transcription to a background thread."""
     with get_db() as conn:
-        conn.execute(
-            "UPDATE recordings SET transcription_status = 'processing', transcription_progress = 0 WHERE id = ?",
-            (recording_id,)
-        )
+        conn.execute("UPDATE recordings SET transcription_status = 'processing', transcription_progress = 0 WHERE id = ?", (recording_id,))
         conn.commit()
     
     transcript_path = filepath.rsplit(".", 1)[0] + ".txt"
     await asyncio.to_thread(_run_transcription, recording_id, filepath, transcript_path)
+    
+    if get_setting("auto_highlight", "false") == "true":
+        from app.highlighter import process_highlight_task
+        asyncio.create_task(process_highlight_task(recording_id, filepath, transcript_path))
