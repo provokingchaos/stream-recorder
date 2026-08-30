@@ -41,8 +41,8 @@ async def _sniff_logic(target_url: str) -> list:
     found_media = set()
 
     # 1. Live365 direct URL match
-    if "live365.com" in target_url and "station=" in target_url:
-        parsed = urllib.parse.urlparse(target_url)
+    parsed = urllib.parse.urlparse(target_url)
+    if parsed.netloc == "live365.com" or parsed.netloc.endswith(".live365.com"):
         params = urllib.parse.parse_qs(parsed.query)
         if "station" in params:
             live365_stream = await resolve_live365(params["station"][0])
