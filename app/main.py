@@ -122,6 +122,9 @@ def delete_stream(stream_id: int):
 
 @app.post("/api/record/start")
 async def start_recording(payload: ManualRecordRequest):
+    import datetime
+    from app.notifier import send_telegram_notification
+
     with get_db() as conn:
         stream = conn.execute("SELECT * FROM streams WHERE id = ?", (payload.stream_id,)).fetchone()
         if not stream:
@@ -146,7 +149,6 @@ async def start_recording(payload: ManualRecordRequest):
     active_recordings[recording_id] = recorder
 
     try:
-        from app.notifier import send_telegram_notification
         start_str = datetime.datetime.now().strftime("%I:%M %p")
         send_telegram_notification(
             "notif_manual_start",
@@ -335,10 +337,21 @@ def index():
 
 @app.get("/api/logs")
 def get_logs():
-    if not os.path.exists("/config/app.log"): 
-        return {"logs": "No application logs available yet."}
-    with open("/config/app.log", "r") as f:
-        return {"logs": "".join(f.readlines()[-200:])}
+    try:
+        with get_db() as conn:
+            # Check if table exists before querying
+            count = conn.execute("SELECT count(*) FROM sqlite_master WHERE type='table' AND name='logs'").fetchone()[0]
+            if count == 0:
+                return {"logs": "No application logs available yet."}
+                
+            rows = conn.execute("SELECT timestamp, message FROM logs ORDER BY id DESC LIMIT 200").fetchall()
+            if not rows:
+                return {"logs": "No application logs available yet."}
+                
+            log_lines = [f"[{r['timestamp']}] {r['message']}" for r in reversed(rows)]
+            return {"logs": "\n".join(log_lines)}
+    except Exception as e:
+        return {"logs": f"Error reading logs: {str(e)}"}
 
 @app.get("/api/recordings/{rec_id}/play")
 def play_recording(rec_id: int):
@@ -459,11 +472,9 @@ async def post_sys_settings(request: Request):
         if prompt_content is not None:
             config_dir = os.path.abspath(os.getenv("CONFIG_DIR", "/config"))
             raw_filename = (prompt_file or get_setting("highlight_prompt_file", "highlight_prompt.txt")).strip() or "highlight_prompt.txt"
-            
             target_filename = os.path.basename(raw_filename)
             target_path = os.path.abspath(os.path.join(config_dir, target_filename))
             
-            # Secure containment validation to satisfy CodeQL
             if os.path.commonpath([config_dir, target_path]) != config_dir:
                 raise ValueError("Security violation: Path traversal attempt detected.")
                 

@@ -8,7 +8,6 @@ CONFIG_DIR = os.getenv("CONFIG_DIR", "/config")
 os.makedirs(CONFIG_DIR, exist_ok=True)
 
 DB_PATH = os.path.join(CONFIG_DIR, "stream_recorder.db")
-LOG_PATH = os.path.join(CONFIG_DIR, "app.log")
 
 @contextmanager
 def get_db():
@@ -123,13 +122,15 @@ def set_setting(key: str, value: str):
         conn.commit()
 
 def log_event(message: str):
+    # Print to Docker terminal for visibility
+    print(f"[ENGINE LOG] {message}", flush=True)
     try:
         with get_db() as conn:
             conn.execute("CREATE TABLE IF NOT EXISTS logs (id INTEGER PRIMARY KEY AUTOINCREMENT, message TEXT NOT NULL, timestamp DATETIME DEFAULT CURRENT_TIMESTAMP)")
             conn.execute("INSERT INTO logs (message) VALUES (?)", (str(message),))
             conn.commit()
     except Exception as e:
-        print(f"[LOG ERROR] {e}: {message}", flush=True)
+        print(f"[DB ERROR] Failed to save log: {e}", flush=True)
 
 def recover_interrupted_recordings():
     try:
