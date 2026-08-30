@@ -2,7 +2,16 @@ FROM python:3.12-slim
 
 ENV PYTHONUNBUFFERED=1     DEBIAN_FRONTEND=noninteractive     CONFIG_DIR=/config     RECORDINGS_DIR=/recordings
 
-RUN apt-get update && apt-get install -y --no-install-recommends     tini     ffmpeg     chromium     chromium-driver     curl     && rm -rf /var/lib/apt/lists/*
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    tini \
+    ffmpeg \
+    chromium \
+    chromium-driver \
+    curl \
+    gcc \
+    g++ \
+    python3-dev \
+    && rm -rf /var/lib/apt/lists/*
 
 WORKDIR /app
 
