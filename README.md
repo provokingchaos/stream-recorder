@@ -10,11 +10,11 @@ A lightweight, automated stream recording and scheduling platform packaged as a 
 
 ## Features
 
-* **AI Audio Transcription:** CPU-optimized, multi-threaded INT8 transcription via `faster-whisper`. Generate transcripts automatically upon stream completion or trigger them manually from the dashboard.
+* **Dynamic AI Audio Transcription:** CPU-optimized, multi-threaded INT8 transcription via `faster-whisper`. Hot-swap between model sizes (Tiny to Large-v3) directly from the UI, force model caching, and generate transcripts automatically or on-demand.
 * **Advanced Stream Discovery:** Built-in Playwright and yt-dlp sniffer extracts hidden audio URLs (including direct resolution of `.pls` and `.m3u` playlists) directly from station websites.
 * **Automated Scheduling:** AsyncIO APScheduler job engine with strict UTC normalization to ensure accurate execution across time zones.
 * **Accurate Media Telemetry:** Utilizes `ffprobe` to extract true media duration—compensating for HLS rolling buffers—while calculating disk file size growth on the fly.
-* **Responsive Web Dashboard:** A mobile-friendly Alpine.js and Tailwind CSS frontend featuring system theme auto-detection, in-browser playback, and fluid data cards.
+* **Responsive Web Dashboard:** A mobile-friendly Alpine.js and Tailwind CSS frontend featuring system theme auto-detection, in-browser playback, fluid data cards, and live download status tracking.
 * **Structured Filename Convention:** Standardizes recorded files according to the format: `{StreamName}_{Description}_{YYYY-MM-DD_HH-MM-SS}.mp3`.
 * **Asynchronous Telegram Alerts:** Dispatches clean, high-contrast HTML notification cards for recording events and stream health changes without blocking the application event loop.
 * **Self-Healing Library:** Automatically prunes database records if physical audio or transcript files are manually removed from the storage drive.
@@ -100,6 +100,7 @@ Configure application behavior and Telegram alerts directly from the **Settings*
 |---|---|---|
 | `recordings_dir` | Internal container path where media and transcripts are saved | `/recordings` |
 | `auto_transcribe` | Generate a text transcript immediately after a recording finishes | `false` |
+| `whisper_model` | AI model size used for audio transcription (tiny.en, base.en, etc.) | `base.en` |
 | `telegram_token` | Bot token provided by `@BotFather` | `""` |
 | `telegram_chat_id` | Target Channel, Group, or Direct Chat ID | `""` |
 | `notif_sched_start` | Alert when a scheduled recording begins | `false` |
@@ -152,6 +153,7 @@ Message templates reside in `app/messages.json` and are persisted to `/config/me
 | `DELETE` | `/api/schedules/{id}` | Delete a scheduled recording job |
 | `GET` | `/api/sys_settings` | Retrieve system preferences and Telegram credentials |
 | `POST` | `/api/sys_settings` | Save application preferences and alert toggles |
+| `POST` | `/api/model/cache` | Force download and cache verification for a specific AI model |
 | `POST` | `/api/purge` | Execute a complete database factory reset |
 
 ---
@@ -163,7 +165,7 @@ Application state is preserved inside `/config/stream_recorder.db` across contai
 * **`streams`**: Stream identifiers, feed URLs, and friendly names.
 * **`schedules`**: Scheduled start/end windows stored in UTC, stream IDs, and descriptions.
 * **`recordings`**: Filepaths, exit statuses, true media duration, disk sizes, and transcription states.
-* **`settings`**: Key-value pairs for system options, automation toggles, and notification tokens.
+* **`settings`**: Key-value pairs for system options, automation toggles, model parameters, and notification tokens.
 * **`logs`**: Centralized event and execution history.
 
 ---
