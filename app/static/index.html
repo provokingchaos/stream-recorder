@@ -75,7 +75,8 @@
                                 <!-- Transcription Badges -->
                                 <template x-if="rec.transcription_status === 'processing'">
                                     <span
-                                        class="px-2 py-1 text-xs font-bold rounded-full bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-200 animate-pulse">TRANSCRIBING...</span>
+                                        class="px-2 py-1 text-xs font-bold rounded-full bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-200 animate-pulse"
+                                        x-text="`Transcribing... ${rec.transcription_progress || 0}%`"></span>
                                 </template>
                                 <template x-if="rec.transcription_status === 'failed'">
                                     <span

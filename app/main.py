@@ -205,7 +205,8 @@ def get_recordings_api():
                     r.status, 
                     COALESCE(s.label, 'Unknown Stream') AS stream_label,
                     COALESCE(r.transcription_status, 'none') AS transcription_status,
-                    r.transcript_path
+                    r.transcript_path,
+                    COALESCE(r.transcription_progress, 0) AS transcription_progress
                 FROM recordings r
                 LEFT JOIN streams s ON r.stream_id = s.id
                 ORDER BY r.id DESC
@@ -227,6 +228,7 @@ def get_recordings_api():
                 stream_label = r[9]
                 trans_status = r[10]
                 trans_path = r[11]
+                trans_prog = r[12]
 
                 if status == "completed":
                     file_exists = False
@@ -273,7 +275,8 @@ def get_recordings_api():
                     "status": status,
                     "stream_label": stream_label,
                     "transcription_status": trans_status,
-                    "transcript_path": trans_path
+                    "transcript_path": trans_path,
+                    "transcription_progress": trans_prog
                 })
             
             if deleted_any:

@@ -3,7 +3,6 @@ import os
 from faster_whisper import WhisperModel
 from app.database import get_db, log_event, get_setting
 
-# Global variables for lazy loading and hot-swapping
 _model = None
 _loaded_model_size = None
 
@@ -20,7 +19,6 @@ def _run_transcription(recording_id: int, filepath: str, transcript_path: str):
     try:
         model_size = get_setting("whisper_model", "base.en")
         
-        # Load or reload the model if the size setting changed
         if _model is None or _loaded_model_size != model_size:
             config_dir = os.getenv("CONFIG_DIR", "/config")
             model_dir = os.path.join(config_dir, "models")
@@ -29,26 +27,48 @@ def _run_transcription(recording_id: int, filepath: str, transcript_path: str):
             _loaded_model_size = model_size
         
         segments, info = _model.transcribe(filepath, beam_size=5)
+        total_duration = info.duration if info.duration and info.duration > 0 else 1.0
+        last_pct = 0
         
         with open(transcript_path, "w", encoding="utf-8") as f:
             for segment in segments:
                 f.write(f"[{segment.start:.2f}s -> {segment.end:.2f}s] {segment.text}\n")
+                
+                # Calculate progress up to 99% during iteration
+                pct = min(99, max(0, int((segment.end / total_duration) * 100)))
+                if pct > last_pct:
+                    last_pct = pct
+                    with get_db() as conn:
+                        conn.execute(
+                            "UPDATE recordings SET transcription_progress = ? WHERE id = ?",
+                            (pct, recording_id)
+                        )
+                        conn.commit()
         
         with get_db() as conn:
-            conn.execute("UPDATE recordings SET transcription_status = 'completed', transcript_path = ? WHERE id = ?", (transcript_path, recording_id))
+            conn.execute(
+                "UPDATE recordings SET transcription_status = 'completed', transcription_progress = 100, transcript_path = ? WHERE id = ?",
+                (transcript_path, recording_id)
+            )
             conn.commit()
             
         log_event(f"Transcription completed for recording #{recording_id} using {model_size}")
     except Exception as e:
         with get_db() as conn:
-            conn.execute("UPDATE recordings SET transcription_status = 'failed' WHERE id = ?", (recording_id,))
+            conn.execute(
+                "UPDATE recordings SET transcription_status = 'failed', transcription_progress = 0 WHERE id = ?",
+                (recording_id,)
+            )
             conn.commit()
         log_event(f"Transcription failed for recording #{recording_id}: {e}")
 
 async def transcribe_audio(recording_id: int, filepath: str):
     """Dispatches the CPU-heavy transcription to a background thread."""
     with get_db() as conn:
-        conn.execute("UPDATE recordings SET transcription_status = 'processing' WHERE id = ?", (recording_id,))
+        conn.execute(
+            "UPDATE recordings SET transcription_status = 'processing', transcription_progress = 0 WHERE id = ?",
+            (recording_id,)
+        )
         conn.commit()
     
     transcript_path = filepath.rsplit(".", 1)[0] + ".txt"

@@ -58,6 +58,8 @@ def init_db():
             cursor.execute("ALTER TABLE recordings ADD COLUMN transcription_status TEXT DEFAULT 'none'")
         if "transcript_path" not in columns:
             cursor.execute("ALTER TABLE recordings ADD COLUMN transcript_path TEXT")
+        if "transcription_progress" not in columns:
+            cursor.execute("ALTER TABLE recordings ADD COLUMN transcription_progress INTEGER DEFAULT 0")
         
         conn.execute("""
             CREATE TABLE IF NOT EXISTS schedules (
@@ -88,7 +90,8 @@ def init_db():
             "notif_sched_stop": "false",
             "notif_stream_connected": "false",
             "notif_stream_disconnected": "false",
-            "auto_transcribe": "false"
+            "auto_transcribe": "false",
+            "whisper_model": "base.en"
         }
         for k, v in default_settings.items():
             conn.execute("INSERT OR IGNORE INTO settings (key, value) VALUES (?, ?)", (k, v))
@@ -121,7 +124,7 @@ def recover_interrupted_recordings():
     try:
         with get_db() as conn:
             conn.execute("UPDATE recordings SET status = 'failed' WHERE status = 'recording'")
-            conn.execute("UPDATE recordings SET transcription_status = 'failed' WHERE transcription_status = 'processing'")
+            conn.execute("UPDATE recordings SET transcription_status = 'failed', transcription_progress = 0 WHERE transcription_status = 'processing'")
             conn.commit()
             log_event("System startup: Cleaned up interrupted recording and transcription states.")
     except Exception:
