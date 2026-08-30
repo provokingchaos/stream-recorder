@@ -74,18 +74,11 @@ async def _sniff_logic(target_url: str) -> list:
         re.IGNORECASE
     )
 
-    exec_path = None
-    for candidate in ["/usr/bin/chromium", "/usr/bin/chromium-browser", "/usr/bin/google-chrome"]:
-        if os.path.exists(candidate):
-            exec_path = candidate
-            break
-
     async with async_playwright() as p:
         launch_kwargs = {
             "headless": True,
             "args": ["--no-sandbox", "--disable-dev-shm-usage", "--disable-gpu", "--autoplay-policy=no-user-gesture-required", "--mute-audio"]
         }
-        if exec_path: launch_kwargs["executable_path"] = exec_path
 
         browser = await p.chromium.launch(**launch_kwargs)
         context = await browser.new_context(
