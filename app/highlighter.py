@@ -85,7 +85,7 @@ def _run_highlight(recording_id, audio_path, transcript_path, output_path):
 
         for line in lines:
             current_chunk.append(line)
-            if line["end"] - chunk_start >= 180:
+            if line["end"] - chunk_start >= 45:
                 chunks.append(current_chunk)
                 current_chunk = []
                 chunk_start = line["end"]
