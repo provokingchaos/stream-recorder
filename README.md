@@ -10,13 +10,13 @@ A lightweight, automated stream recording and scheduling platform packaged as a 
 
 ## Features
 
+* **Advanced Stream Discovery:** Built-in Playwright and yt-dlp sniffer extracts hidden audio URLs directly from station websites and web players.
 * **Automated Scheduling:** AsyncIO APScheduler job engine with strict UTC normalization to ensure accurate execution across time zones.
-* **Manual & Scheduled Capture:** Records live internet radio streams, sports broadcasts, and direct audio feeds to high-quality MP3s via FFmpeg.
-* **Live Telemetry Dashboard:** Computes active recording duration and disk file size growth on the fly every second via an Alpine.js and Tailwind CSS frontend.
-* **Structured Filename Convention:** Standardizes recorded files according to the format:
-  `{StreamName}_{Description}_{YYYY-MM-DD_HH-MM-SS}.mp3`
-* **Instant Telegram Delivery Alerts:** Dispatches clean, high-contrast HTML notification cards with custom icons for recording start, recording stop, and stream connection changes.
-* **Dependency-Free Notification Engine:** Utilizes Python standard library HTTP handlers for Telegram dispatch without third-party wrapper overhead.
+* **Accurate Media Telemetry:** Utilizes `ffprobe` to extract true media duration—compensating for HLS rolling buffers—while calculating disk file size growth on the fly.
+* **Responsive Web Dashboard:** A mobile-friendly Alpine.js and Tailwind CSS frontend featuring system theme auto-detection, in-browser playback, and fluid data cards.
+* **Structured Filename Convention:** Standardizes recorded files according to the format: `{StreamName}_{Description}_{YYYY-MM-DD_HH-MM-SS}.mp3`.
+* **Asynchronous Telegram Alerts:** Dispatches clean, high-contrast HTML notification cards for recording events and stream health changes without blocking the application event loop.
+* **Self-Healing Library:** Automatically prunes database records if physical audio files are manually removed from the storage drive.
 * **Multi-Architecture Support:** Built for both `linux/amd64` and `linux/arm64` architectures.
 
 ---
@@ -26,14 +26,14 @@ A lightweight, automated stream recording and scheduling platform packaged as a 
 ```text
 ├── .github/
 │   └── workflows/
-│       └── docker-publish.yml # Multi-arch build, push, and Docker Hub sync
+│       └── docker-publish.yml # Multi-arch build, push, and cache layer sync
 ├── app/
-│   ├── main.py                # FastAPI endpoints and Uvicorn log filters
-│   ├── database.py            # SQLite schema management and event logging
-│   ├── recorder.py            # FFmpeg process execution and metadata tagging
+│   ├── main.py                # FastAPI endpoints and API routing
+│   ├── database.py            # SQLite schema management and initialization
+│   ├── recorder.py            # FFmpeg process execution and ffprobe telemetry
 │   ├── scheduler.py           # APScheduler job definitions and UTC handlers
-│   ├── notifier.py            # HTML Telegram alert delivery service
-│   ├── sniffer.py             # Stream health verification and probing
+│   ├── notifier.py            # Asynchronous HTML Telegram delivery service
+│   ├── sniffer.py             # Playwright and yt-dlp URL extraction engine
 │   ├── messages.json          # Default Telegram message templates
 │   └── static/
 │       └── index.html         # Single-page web dashboard
@@ -90,7 +90,7 @@ docker run -d \
 
 ## Telegram Notifications
 
-Configure Telegram alerts directly from the **Settings** view in the web UI or inject credentials into `/config/stream_recorder.db`.
+Configure Telegram alerts directly from the **Settings** view in the web UI. 
 
 ### Supported Settings
 
@@ -98,12 +98,12 @@ Configure Telegram alerts directly from the **Settings** view in the web UI or i
 |---|---|---|
 | `telegram_token` | Bot token provided by `@BotFather` | `""` |
 | `telegram_chat_id` | Target Channel, Group, or Direct Chat ID | `""` |
-| `notif_sched_start` | Alert when a scheduled recording begins | `true` |
-| `notif_sched_stop` | Alert when a scheduled recording finishes | `true` |
-| `notif_manual_start` | Alert when a manual recording begins | `true` |
-| `notif_manual_stop` | Alert when a manual recording finishes | `true` |
-| `notif_stream_connected` | Alert when a stream source connects | `true` |
-| `notif_stream_disconnected` | Alert when a stream source drops | `true` |
+| `notif_sched_start` | Alert when a scheduled recording begins | `false` |
+| `notif_sched_stop` | Alert when a scheduled recording finishes | `false` |
+| `notif_manual_start` | Alert when a manual recording begins | `false` |
+| `notif_manual_stop` | Alert when a manual recording finishes | `false` |
+| `notif_stream_connected` | Alert when a stream source connects | `false` |
+| `notif_stream_disconnected` | Alert when a stream source drops | `false` |
 
 ### Alert Formatting & Template Tokens
 
@@ -134,14 +134,19 @@ Message templates reside in `app/messages.json` and are persisted to `/config/me
 |---|---|---|
 | `GET` | `/api/streams` | List registered stream sources |
 | `POST` | `/api/streams` | Add a new stream URL and label |
-| `GET` | `/api/recordings` | List completed and active recordings with live duration and byte counts |
-| `POST` | `/api/recordings/start` | Start an immediate recording session |
-| `POST` | `/api/recordings/stop` | Terminate an active recording process |
+| `POST` | `/api/streams/probe` | Extract audio stream URLs from a webpage |
+| `GET` | `/api/recordings` | List completed and active recordings |
+| `POST` | `/api/record/start` | Start an immediate recording session |
+| `POST` | `/api/record/stop/{id}` | Terminate an active recording process |
+| `GET` | `/api/recordings/{id}/play` | Stream a completed recording directly in the browser |
+| `GET` | `/api/recordings/{id}/download` | Download a completed MP3 file |
 | `GET` | `/api/schedules` | List upcoming and completed schedule entries |
 | `POST` | `/api/schedules` | Create a new scheduled capture window |
+| `PATCH` | `/api/schedules/{id}` | Modify an existing schedule entry |
 | `DELETE` | `/api/schedules/{id}` | Delete a scheduled recording job |
-| `GET` | `/api/settings` | Retrieve system preferences and Telegram credentials |
-| `POST` | `/api/settings` | Save application preferences and alert toggles |
+| `GET` | `/api/sys_settings` | Retrieve system preferences and Telegram credentials |
+| `POST` | `/api/sys_settings` | Save application preferences and alert toggles |
+| `POST` | `/api/purge` | Execute a complete database factory reset |
 
 ---
 
@@ -151,7 +156,7 @@ Application state is preserved inside `/config/stream_recorder.db` across contai
 
 * **`streams`**: Stream identifiers, feed URLs, and friendly names.
 * **`schedules`**: Scheduled start/end windows stored in UTC, stream IDs, and descriptions.
-* **`recordings`**: Filepaths, exit statuses, duration metrics, and disk sizes.
+* **`recordings`**: Filepaths, exit statuses, true media duration, and disk sizes.
 * **`settings`**: Key-value pairs for system options and notification tokens.
 * **`logs`**: Centralized event and execution history.
 
