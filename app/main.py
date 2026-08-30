@@ -457,9 +457,16 @@ async def post_sys_settings(request: Request):
             conn.commit()
 
         if prompt_content is not None:
-            config_dir = os.getenv("CONFIG_DIR", "/config")
-            target_filename = os.path.basename((prompt_file or get_setting("highlight_prompt_file", "highlight_prompt.txt")).strip() or "highlight_prompt.txt")
-            target_path = os.path.join(config_dir, target_filename)
+            config_dir = os.path.abspath(os.getenv("CONFIG_DIR", "/config"))
+            raw_filename = (prompt_file or get_setting("highlight_prompt_file", "highlight_prompt.txt")).strip() or "highlight_prompt.txt"
+            
+            target_filename = os.path.basename(raw_filename)
+            target_path = os.path.abspath(os.path.join(config_dir, target_filename))
+            
+            # Secure containment validation to satisfy CodeQL
+            if os.path.commonpath([config_dir, target_path]) != config_dir:
+                raise ValueError("Security violation: Path traversal attempt detected.")
+                
             with open(target_path, "w", encoding="utf-8") as f:
                 f.write(prompt_content)
 
