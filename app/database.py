@@ -54,6 +54,10 @@ def init_db():
             cursor.execute("ALTER TABLE recordings ADD COLUMN start_time TEXT")
         if "end_time" not in columns:
             cursor.execute("ALTER TABLE recordings ADD COLUMN end_time TEXT")
+        if "transcription_status" not in columns:
+            cursor.execute("ALTER TABLE recordings ADD COLUMN transcription_status TEXT DEFAULT 'none'")
+        if "transcript_path" not in columns:
+            cursor.execute("ALTER TABLE recordings ADD COLUMN transcript_path TEXT")
         
         conn.execute("""
             CREATE TABLE IF NOT EXISTS schedules (
@@ -74,7 +78,6 @@ def init_db():
             )
         """)
         
-        # Insert default settings if they do not exist
         default_settings = {
             "recordings_dir": "/recordings",
             "telegram_token": "",
@@ -84,7 +87,8 @@ def init_db():
             "notif_sched_start": "false",
             "notif_sched_stop": "false",
             "notif_stream_connected": "false",
-            "notif_stream_disconnected": "false"
+            "notif_stream_disconnected": "false",
+            "auto_transcribe": "false"
         }
         for k, v in default_settings.items():
             conn.execute("INSERT OR IGNORE INTO settings (key, value) VALUES (?, ?)", (k, v))
@@ -117,7 +121,8 @@ def recover_interrupted_recordings():
     try:
         with get_db() as conn:
             conn.execute("UPDATE recordings SET status = 'failed' WHERE status = 'recording'")
+            conn.execute("UPDATE recordings SET transcription_status = 'failed' WHERE transcription_status = 'processing'")
             conn.commit()
-            log_event("System startup: Cleaned up any interrupted recording states.")
-    except Exception as e:
+            log_event("System startup: Cleaned up interrupted recording and transcription states.")
+    except Exception:
         pass

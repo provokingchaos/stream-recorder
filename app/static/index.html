@@ -54,13 +54,15 @@
                                 <h3 class="text-lg font-bold truncate"
                                     x-text="rec.stream_label || (rec.filename ? rec.filename.split('_')[0] : 'Unknown')">
                                 </h3>
-                                <span class="px-2 py-1 text-xs font-semibold rounded-full md:hidden"
-                                    :class="rec.status === 'recording' ? 'bg-red-200 text-red-800 dark:bg-red-800 dark:text-red-200' : (rec.status === 'completed' ? 'bg-green-200 text-green-800 dark:bg-green-800 dark:text-green-200' : 'bg-gray-200 text-gray-800 dark:bg-gray-600 dark:text-gray-200')"
-                                    x-text="rec.status.toUpperCase()"></span>
+                                <div class="flex gap-2">
+                                    <span class="px-2 py-1 text-xs font-semibold rounded-full md:hidden"
+                                        :class="rec.status === 'recording' ? 'bg-red-200 text-red-800 dark:bg-red-800 dark:text-red-200' : (rec.status === 'completed' ? 'bg-green-200 text-green-800 dark:bg-green-800 dark:text-green-200' : 'bg-gray-200 text-gray-800 dark:bg-gray-600 dark:text-gray-200')"
+                                        x-text="rec.status.toUpperCase()"></span>
+                                </div>
                             </div>
                             <p class="text-xs font-mono text-gray-500 dark:text-gray-400 break-all mb-3"
                                 x-text="rec.filename || 'N/A'"></p>
-                            <div class="flex flex-wrap gap-2 text-sm">
+                            <div class="flex flex-wrap items-center gap-2 text-sm">
                                 <span class="font-mono bg-gray-100 dark:bg-gray-700 px-2 py-1 rounded"
                                     x-text="formatSize(rec.file_size_bytes)"></span>
                                 <span class="font-mono bg-gray-100 dark:bg-gray-700 px-2 py-1 rounded"
@@ -68,6 +70,17 @@
                                 <span class="px-2 py-1 text-xs font-semibold rounded-full hidden md:inline-block"
                                     :class="rec.status === 'recording' ? 'bg-red-200 text-red-800 dark:bg-red-800 dark:text-red-200' : (rec.status === 'completed' ? 'bg-green-200 text-green-800 dark:bg-green-800 dark:text-green-200' : 'bg-gray-200 text-gray-800 dark:bg-gray-600 dark:text-gray-200')"
                                     x-text="rec.status.toUpperCase()"></span>
+
+                                <!-- Transcription Badges -->
+                                <template x-if="rec.transcription_status === 'processing'">
+                                    <span
+                                        class="px-2 py-1 text-xs font-bold rounded-full bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-200 animate-pulse">TRANSCRIBING...</span>
+                                </template>
+                                <template x-if="rec.transcription_status === 'failed'">
+                                    <span
+                                        class="px-2 py-1 text-xs font-bold rounded-full bg-orange-100 text-orange-800 dark:bg-orange-900 dark:text-orange-200">TRANSCRIPT
+                                        FAILED</span>
+                                </template>
                             </div>
                         </div>
 
@@ -79,14 +92,28 @@
                                     <button @click="togglePlay(`/api/recordings/${rec.id}/play`)"
                                         title="Toggle Playback" class="text-2xl hover:scale-110 transition-transform"
                                         x-text="globalAudioUrl === `/api/recordings/${rec.id}/play` ? '⏹️' : '▶️'"></button>
-                                    <a :href="`/api/recordings/${rec.id}/download`" download title="Download Recording"
+                                    <a :href="`/api/recordings/${rec.id}/download`" download title="Download MP3"
                                         class="text-2xl hover:scale-110 transition-transform">⬇️</a>
+
+                                    <template x-if="rec.transcription_status === 'completed'">
+                                        <a :href="`/api/recordings/${rec.id}/transcript`" download
+                                            title="Download Transcript"
+                                            class="text-2xl hover:scale-110 transition-transform">📄</a>
+                                    </template>
                                 </div>
                             </template>
+
                             <template x-if="rec.status === 'recording'">
                                 <button @click="stopRecording(rec.id)"
                                     class="px-4 py-2 bg-red-100 dark:bg-red-900/50 text-red-700 dark:text-red-400 hover:bg-red-200 dark:hover:bg-red-900 rounded-lg font-semibold text-sm transition-colors">Stop</button>
                             </template>
+
+                            <template
+                                x-if="rec.status === 'completed' && (rec.transcription_status === 'none' || rec.transcription_status === 'failed')">
+                                <button @click="startTranscription(rec.id)"
+                                    class="px-4 py-2 bg-blue-100 dark:bg-blue-900/50 text-blue-700 dark:text-blue-400 hover:bg-blue-200 dark:hover:bg-blue-900/70 rounded-lg font-semibold text-sm transition-colors">Transcribe</button>
+                            </template>
+
                             <button @click="deleteRecording(rec.id)"
                                 class="px-4 py-2 bg-gray-100 dark:bg-gray-700 text-red-600 dark:text-red-400 hover:bg-gray-200 dark:hover:bg-gray-600 rounded-lg font-semibold text-sm transition-colors">Delete</button>
                         </div>
@@ -291,13 +318,26 @@
                 <div
                     class="bg-white dark:bg-gray-800 rounded-lg shadow p-4 sm:p-6 border border-gray-200 dark:border-gray-700">
                     <h2 class="text-xl font-bold mb-4 border-b dark:border-gray-700 pb-2">General Engine Settings</h2>
-                    <div class="space-y-4">
+                    <div class="space-y-6">
                         <div>
                             <label class="block text-sm font-medium mb-1">Recordings Directory</label>
                             <input type="text" x-model="settings.recordings_dir"
                                 class="w-full px-3 py-2 border dark:border-gray-600 bg-gray-50 dark:bg-gray-700 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none">
                             <p class="text-xs text-gray-500 dark:text-gray-400 mt-2">The internal folder path where MP3
                                 files are written.</p>
+                        </div>
+
+                        <div
+                            class="flex items-center justify-between bg-gray-50 dark:bg-gray-700/50 p-3 rounded-lg border dark:border-gray-600 gap-3">
+                            <label class="flex items-center gap-3 cursor-pointer">
+                                <input type="checkbox" x-model="settings.auto_transcribe"
+                                    class="w-5 h-5 text-blue-600 rounded bg-white dark:bg-gray-800 border-gray-300 dark:border-gray-600 focus:ring-blue-500 focus:ring-2">
+                                <div>
+                                    <span class="text-sm font-semibold block">Automatic Transcription</span>
+                                    <span class="text-xs text-gray-500 dark:text-gray-400">Generate a text transcript
+                                        immediately after recording finishes.</span>
+                                </div>
+                            </label>
                         </div>
                     </div>
                 </div>
@@ -458,7 +498,8 @@
                 settings: {
                     recordings_dir: '/recordings', telegram_token: '', telegram_chat_id: '',
                     notif_manual_start: false, notif_manual_stop: false, notif_sched_start: false,
-                    notif_sched_stop: false, notif_stream_connected: false, notif_stream_disconnected: false
+                    notif_sched_stop: false, notif_stream_connected: false, notif_stream_disconnected: false,
+                    auto_transcribe: false
                 },
                 appLogs: 'Loading logs...',
                 isProbing: false,
@@ -510,7 +551,8 @@
                             notif_sched_start: d.notif_sched_start === 'true',
                             notif_sched_stop: d.notif_sched_stop === 'true',
                             notif_stream_connected: d.notif_stream_connected === 'true',
-                            notif_stream_disconnected: d.notif_stream_disconnected === 'true'
+                            notif_stream_disconnected: d.notif_stream_disconnected === 'true',
+                            auto_transcribe: d.auto_transcribe === 'true'
                         });
                     });
                 },
@@ -523,6 +565,7 @@
                     payload.notif_sched_stop = payload.notif_sched_stop ? 'true' : 'false';
                     payload.notif_stream_connected = payload.notif_stream_connected ? 'true' : 'false';
                     payload.notif_stream_disconnected = payload.notif_stream_disconnected ? 'true' : 'false';
+                    payload.auto_transcribe = payload.auto_transcribe ? 'true' : 'false';
 
                     fetch('/api/sys_settings', {
                         method: 'POST',
@@ -619,6 +662,10 @@
 
                 startRecording(id) { fetch('/api/record/start', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ stream_id: parseInt(id, 10) }) }).then(() => { this.fetchRecordings(); this.activeTab = 'dashboard'; }); },
                 stopRecording(id) { fetch(`/api/record/stop/${id}`, { method: 'POST' }).then(() => this.fetchRecordings()); },
+
+                startTranscription(id) {
+                    fetch(`/api/recordings/${id}/transcribe`, { method: 'POST' }).then(() => this.fetchRecordings());
+                },
 
                 saveSchedule() {
                     if (!this.schedStreamId || !this.startTime || !this.endTime) return alert("Fill required fields.");

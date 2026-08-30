@@ -14,24 +14,22 @@ class EndpointFilter(logging.Filter):
     def filter(self, record: logging.LogRecord) -> bool:
         return "/api/recordings" not in record.getMessage()
 
-# Filter polling endpoint from Uvicorn access logs
 logging.getLogger("uvicorn.access").addFilter(EndpointFilter())
 
 from app.database import init_db, recover_interrupted_recordings, get_db, get_setting, set_setting, log_event
 from app.scheduler import init_scheduler, schedule_job, remove_scheduled_job
 from app.sniffer import sniff_stream_url
 from app.recorder import StreamRecorder, active_recordings
+from app.transcriber import transcribe_audio
 
 def rebuild_schedules_schema():
     with get_db() as conn:
         try:
-            # Check if legacy cron_expression column exists; if so, nuke the table
             conn.execute("SELECT cron_expression FROM schedules LIMIT 1")
             conn.execute("DROP TABLE schedules")
         except Exception:
             pass
         
-        # Build the exact modern schema
         conn.execute('''
             CREATE TABLE IF NOT EXISTS schedules (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -56,8 +54,6 @@ async def lifespan(app: FastAPI):
 app = FastAPI(title="Stream Recorder", lifespan=lifespan)
 app.mount("/static", StaticFiles(directory="app/static"), name="static")
 
-# Models
-
 class StreamCreate(BaseModel):
     label: str
     stream_url: str
@@ -78,18 +74,15 @@ class ScheduleCreateDate(BaseModel):
     description: str = ""
 
 def resolve_recording_path(rec: dict) -> Optional[Path]:
-    """Check stored filepath first, then fall back to recordings_dir + filename."""
     if rec.get("filepath"):
         candidate = Path(rec["filepath"])
         if candidate.exists() and candidate.is_file():
             return candidate
-
     if rec.get("filename"):
         rec_dir = Path(get_setting("recordings_dir", "/recordings"))
         candidate = rec_dir / os.path.basename(rec["filename"])
         if candidate.exists() and candidate.is_file():
             return candidate
-
     return None
 
 @app.post("/api/streams/probe")
@@ -129,7 +122,6 @@ def delete_stream(stream_id: int):
         conn.commit()
     return {"success": True}
 
-# Schedules API
 @app.post("/api/record/start")
 async def start_recording(payload: ManualRecordRequest):
     import datetime
@@ -179,6 +171,22 @@ async def stop_recording(recording_id: int):
     active_recordings.pop(recording_id, None)
     return {"success": True}
 
+@app.post("/api/recordings/{rec_id}/transcribe")
+async def trigger_transcription(rec_id: int):
+    with get_db() as conn:
+        rec = conn.execute("SELECT filepath, filename, status FROM recordings WHERE id = ?", (rec_id,)).fetchone()
+    
+    if not rec or rec["status"] != "completed":
+        raise HTTPException(status_code=400, detail="Recording is not ready for transcription.")
+        
+    file_path = resolve_recording_path(dict(rec))
+    if not file_path:
+        raise HTTPException(status_code=404, detail="Recording file not found on disk.")
+        
+    import asyncio
+    asyncio.create_task(transcribe_audio(rec_id, str(file_path)))
+    return {"success": True}
+
 @app.get("/api/recordings")
 def get_recordings_api():
     results = []
@@ -198,7 +206,9 @@ def get_recordings_api():
                     COALESCE(r.duration_seconds, 0) AS duration_seconds, 
                     COALESCE(r.file_size_bytes, 0) AS file_size_bytes, 
                     r.status, 
-                    COALESCE(s.label, 'Unknown Stream') AS stream_label
+                    COALESCE(s.label, 'Unknown Stream') AS stream_label,
+                    COALESCE(r.transcription_status, 'none') AS transcription_status,
+                    r.transcript_path
                 FROM recordings r
                 LEFT JOIN streams s ON r.stream_id = s.id
                 ORDER BY r.id DESC
@@ -218,8 +228,9 @@ def get_recordings_api():
                 file_size = r[7]
                 status = r[8]
                 stream_label = r[9]
+                trans_status = r[10]
+                trans_path = r[11]
 
-                # Auto-cleanup logic: Remove DB row if physical file is missing
                 if status == "completed":
                     file_exists = False
                     if filepath and os.path.exists(filepath):
@@ -230,9 +241,14 @@ def get_recordings_api():
                             file_exists = True
                     
                     if not file_exists:
+                        if trans_path and os.path.exists(trans_path):
+                            try:
+                                os.remove(trans_path)
+                            except OSError:
+                                pass
                         conn.execute("DELETE FROM recordings WHERE id = ?", (rec_id,))
                         deleted_any = True
-                        continue # Skip appending to dashboard results
+                        continue
 
                 if status == "recording":
                     if start_time_str:
@@ -258,7 +274,9 @@ def get_recordings_api():
                     "duration_seconds": duration_sec,
                     "file_size_bytes": file_size,
                     "status": status,
-                    "stream_label": stream_label
+                    "stream_label": stream_label,
+                    "transcription_status": trans_status,
+                    "transcript_path": trans_path
                 })
             
             if deleted_any:
@@ -274,12 +292,17 @@ async def delete_recording(rec_id: int):
         active_recordings.pop(rec_id, None)
 
     with get_db() as conn:
-        rec = conn.execute("SELECT filepath, filename FROM recordings WHERE id = ?", (rec_id,)).fetchone()
+        rec = conn.execute("SELECT filepath, filename, transcript_path FROM recordings WHERE id = ?", (rec_id,)).fetchone()
         if rec:
             file_path = resolve_recording_path(dict(rec))
             if file_path and file_path.exists():
                 try:
                     os.remove(file_path)
+                except OSError:
+                    pass
+            if rec["transcript_path"] and os.path.exists(rec["transcript_path"]):
+                try:
+                    os.remove(rec["transcript_path"])
                 except OSError:
                     pass
         conn.execute("DELETE FROM recordings WHERE id = ?", (rec_id,))
@@ -325,6 +348,17 @@ def download_recording(rec_id: int):
         return FileResponse(path=str(file_path), media_type="audio/mpeg", filename=download_name)
         
     raise HTTPException(status_code=404, detail="Recording file not found on disk.")
+
+@app.get("/api/recordings/{rec_id}/transcript")
+def download_transcript(rec_id: int):
+    with get_db() as conn:
+        rec = conn.execute("SELECT transcript_path, filename FROM recordings WHERE id = ?", (rec_id,)).fetchone()
+        
+    if not rec or not rec["transcript_path"] or not os.path.exists(rec["transcript_path"]):
+        raise HTTPException(status_code=404, detail="Transcript file not found on disk.")
+
+    download_name = (rec["filename"] or "transcript").rsplit(".", 1)[0] + ".txt"
+    return FileResponse(path=rec["transcript_path"], media_type="text/plain", filename=download_name)
 
 @app.get("/api/schedules")
 def get_schedules():
@@ -378,7 +412,8 @@ def get_sys_settings():
         "notif_sched_start": d.get("notif_sched_start", "false"),
         "notif_sched_stop": d.get("notif_sched_stop", "false"),
         "notif_stream_connected": d.get("notif_stream_connected", "false"),
-        "notif_stream_disconnected": d.get("notif_stream_disconnected", "false")
+        "notif_stream_disconnected": d.get("notif_stream_disconnected", "false"),
+        "auto_transcribe": d.get("auto_transcribe", "false")
     }
 
 @app.post("/api/sys_settings")

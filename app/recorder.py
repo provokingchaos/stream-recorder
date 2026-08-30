@@ -1,12 +1,12 @@
 import asyncio
 import os
 import datetime
-import sqlite3
 import urllib.request
 import re
 from typing import Dict, Optional
-from app.database import get_db, log_event
+from app.database import get_db, log_event, get_setting
 from app.notifier import send_telegram_notification
+from app.transcriber import transcribe_audio
 
 active_recordings: Dict[int, "StreamRecorder"] = {}
 
@@ -137,13 +137,11 @@ class StreamRecorder:
 
     async def _finalize_recording(self):
         end_time = datetime.datetime.now()
-        
         file_size = 0
         duration_seconds = 0
 
         if self.output_path and os.path.exists(self.output_path):
             file_size = os.path.getsize(self.output_path)
-            
             try:
                 proc = await asyncio.create_subprocess_exec(
                     "ffprobe", "-v", "error", "-show_entries",
@@ -169,8 +167,11 @@ class StreamRecorder:
             conn.commit()
 
         log_event(f"Finished recording '{self.label}' (Duration: {duration_seconds}s, Size: {file_size} bytes)")
-        
         active_recordings.pop(self.recording_id, None)
+
+        # Trigger automatic transcription if enabled
+        if get_setting("auto_transcribe", "false") == "true" and file_size > 0:
+            asyncio.create_task(transcribe_audio(self.recording_id, self.output_path))
 
     async def stop(self):
         self.is_stopping = True
