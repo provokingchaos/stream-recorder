@@ -21,265 +21,258 @@
             </button>
         </div>
 
-        <div
-            class="flex space-x-4 mb-6 border-b border-gray-300 dark:border-gray-700 pb-2 overflow-x-auto scrollbar-hide">
+        <!-- Navigation Tabs: Wraps naturally on small screens -->
+        <div class="flex flex-wrap gap-2 mb-6 border-b border-gray-300 dark:border-gray-700 pb-2">
             <button @click="activeTab = 'dashboard'"
-                :class="activeTab === 'dashboard' ? 'border-b-2 border-blue-600 text-blue-600 dark:text-blue-400' : 'text-gray-500 dark:text-gray-400'"
-                class="px-2 sm:px-4 py-2 font-semibold whitespace-nowrap focus:outline-none">Dashboard</button>
+                :class="activeTab === 'dashboard' ? 'bg-blue-100 dark:bg-blue-900/50 text-blue-700 dark:text-blue-400' : 'text-gray-600 dark:text-gray-400 hover:bg-gray-200 dark:hover:bg-gray-800'"
+                class="px-4 py-2 rounded-lg font-semibold transition-colors focus:outline-none">Dashboard</button>
             <button @click="activeTab = 'library'"
-                :class="activeTab === 'library' ? 'border-b-2 border-blue-600 text-blue-600 dark:text-blue-400' : 'text-gray-500 dark:text-gray-400'"
-                class="px-2 sm:px-4 py-2 font-semibold whitespace-nowrap focus:outline-none">Library</button>
+                :class="activeTab === 'library' ? 'bg-blue-100 dark:bg-blue-900/50 text-blue-700 dark:text-blue-400' : 'text-gray-600 dark:text-gray-400 hover:bg-gray-200 dark:hover:bg-gray-800'"
+                class="px-4 py-2 rounded-lg font-semibold transition-colors focus:outline-none">Library</button>
             <button @click="activeTab = 'schedules'"
-                :class="activeTab === 'schedules' ? 'border-b-2 border-blue-600 text-blue-600 dark:text-blue-400' : 'text-gray-500 dark:text-gray-400'"
-                class="px-2 sm:px-4 py-2 font-semibold whitespace-nowrap focus:outline-none">Schedules</button>
+                :class="activeTab === 'schedules' ? 'bg-blue-100 dark:bg-blue-900/50 text-blue-700 dark:text-blue-400' : 'text-gray-600 dark:text-gray-400 hover:bg-gray-200 dark:hover:bg-gray-800'"
+                class="px-4 py-2 rounded-lg font-semibold transition-colors focus:outline-none">Schedules</button>
             <button @click="activeTab = 'settings'"
-                :class="activeTab === 'settings' ? 'border-b-2 border-blue-600 text-blue-600 dark:text-blue-400' : 'text-gray-500 dark:text-gray-400'"
-                class="px-2 sm:px-4 py-2 font-semibold whitespace-nowrap focus:outline-none">Settings</button>
+                :class="activeTab === 'settings' ? 'bg-blue-100 dark:bg-blue-900/50 text-blue-700 dark:text-blue-400' : 'text-gray-600 dark:text-gray-400 hover:bg-gray-200 dark:hover:bg-gray-800'"
+                class="px-4 py-2 rounded-lg font-semibold transition-colors focus:outline-none">Settings</button>
             <button @click="activeTab = 'logs'"
-                :class="activeTab === 'logs' ? 'border-b-2 border-blue-600 text-blue-600 dark:text-blue-400' : 'text-gray-500 dark:text-gray-400'"
-                class="px-2 sm:px-4 py-2 font-semibold whitespace-nowrap focus:outline-none">App Logs</button>
+                :class="activeTab === 'logs' ? 'bg-blue-100 dark:bg-blue-900/50 text-blue-700 dark:text-blue-400' : 'text-gray-600 dark:text-gray-400 hover:bg-gray-200 dark:hover:bg-gray-800'"
+                class="px-4 py-2 rounded-lg font-semibold transition-colors focus:outline-none">App Logs</button>
         </div>
 
+        <!-- Dashboard / Active Recordings -->
         <div x-show="activeTab === 'dashboard'" x-cloak>
             <h2 class="text-xl font-bold mb-4">Live Recordings & History</h2>
-            <div class="bg-white dark:bg-gray-800 rounded-lg shadow overflow-x-auto">
-                <table class="min-w-full divide-y divide-gray-200 dark:divide-gray-700">
-                    <thead class="bg-gray-100 dark:bg-gray-700">
-                        <tr>
-                            <th
-                                class="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase whitespace-nowrap">
-                                Stream</th>
-                            <th
-                                class="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase whitespace-nowrap">
-                                File Name</th>
-                            <th
-                                class="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase whitespace-nowrap">
-                                Status</th>
-                            <th
-                                class="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase whitespace-nowrap">
-                                Size (MB)</th>
-                            <th
-                                class="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase whitespace-nowrap">
-                                Duration</th>
-                            <th
-                                class="px-4 py-3 text-right text-xs font-medium text-gray-500 dark:text-gray-300 uppercase whitespace-nowrap">
-                                Actions</th>
-                        </tr>
-                    </thead>
-                    <tbody class="divide-y divide-gray-200 dark:divide-gray-700">
-                        <template x-for="rec in recordings" :key="rec.id">
-                            <tr
-                                :class="rec.status === 'recording' ? 'bg-red-50 dark:bg-red-900/20' : 'bg-white dark:bg-gray-800'">
-                                <td class="px-4 py-3 text-sm font-semibold whitespace-nowrap"
+            <div class="space-y-4">
+                <template x-for="rec in recordings" :key="rec.id">
+                    <div :class="rec.status === 'recording' ? 'bg-red-50 dark:bg-red-900/20 border-red-200 dark:border-red-800' : 'bg-white dark:bg-gray-800 border-gray-200 dark:border-gray-700'"
+                        class="p-4 rounded-lg shadow border flex flex-col md:flex-row md:items-center gap-4 transition-colors">
+
+                        <!-- Details -->
+                        <div class="flex-1 min-w-0">
+                            <div class="flex justify-between items-start md:items-center mb-1">
+                                <h3 class="text-lg font-bold truncate"
                                     x-text="rec.stream_label || (rec.filename ? rec.filename.split('_')[0] : 'Unknown')">
-                                </td>
-                                <td class="px-4 py-3 text-xs font-mono text-gray-500 dark:text-gray-400 whitespace-nowrap"
-                                    x-text="rec.filename || 'N/A'"></td>
-                                <td class="px-4 py-3 text-sm whitespace-nowrap">
-                                    <span class="px-2 py-1 text-xs font-semibold rounded-full"
-                                        :class="rec.status === 'recording' ? 'bg-red-200 text-red-800 dark:bg-red-800 dark:text-red-200' : (rec.status === 'completed' ? 'bg-green-200 text-green-800 dark:bg-green-800 dark:text-green-200' : 'bg-gray-200 text-gray-800 dark:bg-gray-600 dark:text-gray-200')"
-                                        x-text="rec.status.toUpperCase()"></span>
-                                </td>
-                                <td class="px-4 py-3 text-sm font-mono whitespace-nowrap"
-                                    x-text="formatSize(rec.file_size_bytes)"></td>
-                                <td class="px-4 py-3 text-sm font-mono whitespace-nowrap"
-                                    x-text="formatDuration(rec.duration_seconds)"></td>
-                                <td class="px-4 py-3 text-right flex justify-end items-center gap-3 whitespace-nowrap">
-                                    <template x-if="rec.status === 'completed'">
-                                        <div class="flex items-center gap-3">
-                                            <button @click="togglePlay(`/api/recordings/${rec.id}/play`)"
-                                                title="Toggle Playback"
-                                                class="text-xl hover:scale-125 transition-transform"
-                                                x-text="globalAudioUrl === `/api/recordings/${rec.id}/play` ? '⏹️' : '▶️'"></button>
-                                            <a :href="`/api/recordings/${rec.id}/download`" download
-                                                title="Download Recording"
-                                                class="text-xl hover:scale-125 transition-transform">⬇️</a>
-                                        </div>
-                                    </template>
-                                    <template x-if="rec.status === 'recording'">
-                                        <button @click="stopRecording(rec.id)"
-                                            class="text-red-600 hover:text-red-800 dark:text-red-400 font-semibold text-sm">Stop</button>
-                                    </template>
-                                    <button @click="deleteRecording(rec.id)"
-                                        class="text-red-600 hover:text-red-800 dark:text-red-400 font-semibold text-sm">Delete</button>
-                                </td>
-                            </tr>
-                        </template>
-                    </tbody>
-                </table>
+                                </h3>
+                                <span class="px-2 py-1 text-xs font-semibold rounded-full md:hidden"
+                                    :class="rec.status === 'recording' ? 'bg-red-200 text-red-800 dark:bg-red-800 dark:text-red-200' : (rec.status === 'completed' ? 'bg-green-200 text-green-800 dark:bg-green-800 dark:text-green-200' : 'bg-gray-200 text-gray-800 dark:bg-gray-600 dark:text-gray-200')"
+                                    x-text="rec.status.toUpperCase()"></span>
+                            </div>
+                            <p class="text-xs font-mono text-gray-500 dark:text-gray-400 break-all mb-3"
+                                x-text="rec.filename || 'N/A'"></p>
+                            <div class="flex flex-wrap gap-2 text-sm">
+                                <span class="font-mono bg-gray-100 dark:bg-gray-700 px-2 py-1 rounded"
+                                    x-text="formatSize(rec.file_size_bytes)"></span>
+                                <span class="font-mono bg-gray-100 dark:bg-gray-700 px-2 py-1 rounded"
+                                    x-text="formatDuration(rec.duration_seconds)"></span>
+                                <span class="px-2 py-1 text-xs font-semibold rounded-full hidden md:inline-block"
+                                    :class="rec.status === 'recording' ? 'bg-red-200 text-red-800 dark:bg-red-800 dark:text-red-200' : (rec.status === 'completed' ? 'bg-green-200 text-green-800 dark:bg-green-800 dark:text-green-200' : 'bg-gray-200 text-gray-800 dark:bg-gray-600 dark:text-gray-200')"
+                                    x-text="rec.status.toUpperCase()"></span>
+                            </div>
+                        </div>
+
+                        <!-- Actions -->
+                        <div
+                            class="flex items-center gap-3 border-t md:border-t-0 md:border-l border-gray-200 dark:border-gray-700 pt-4 md:pt-0 md:pl-6 justify-end">
+                            <template x-if="rec.status === 'completed'">
+                                <div class="flex items-center gap-3 mr-2">
+                                    <button @click="togglePlay(`/api/recordings/${rec.id}/play`)"
+                                        title="Toggle Playback" class="text-2xl hover:scale-110 transition-transform"
+                                        x-text="globalAudioUrl === `/api/recordings/${rec.id}/play` ? '⏹️' : '▶️'"></button>
+                                    <a :href="`/api/recordings/${rec.id}/download`" download title="Download Recording"
+                                        class="text-2xl hover:scale-110 transition-transform">⬇️</a>
+                                </div>
+                            </template>
+                            <template x-if="rec.status === 'recording'">
+                                <button @click="stopRecording(rec.id)"
+                                    class="px-4 py-2 bg-red-100 dark:bg-red-900/50 text-red-700 dark:text-red-400 hover:bg-red-200 dark:hover:bg-red-900 rounded-lg font-semibold text-sm transition-colors">Stop</button>
+                            </template>
+                            <button @click="deleteRecording(rec.id)"
+                                class="px-4 py-2 bg-gray-100 dark:bg-gray-700 text-red-600 dark:text-red-400 hover:bg-gray-200 dark:hover:bg-gray-600 rounded-lg font-semibold text-sm transition-colors">Delete</button>
+                        </div>
+                    </div>
+                </template>
+                <div x-show="recordings.length === 0"
+                    class="text-center py-10 bg-white dark:bg-gray-800 rounded-lg shadow text-gray-500 dark:text-gray-400 border border-gray-200 dark:border-gray-700">
+                    No recordings found.</div>
             </div>
         </div>
 
+        <!-- Library -->
         <div x-show="activeTab === 'library'" x-cloak>
-            <div class="bg-white dark:bg-gray-800 rounded-lg shadow p-4 sm:p-6 mb-6">
+            <div
+                class="bg-white dark:bg-gray-800 rounded-lg shadow p-4 sm:p-6 mb-6 border border-gray-200 dark:border-gray-700">
                 <h2 class="text-xl font-bold mb-4">Discover Stream URL</h2>
-                <div class="flex flex-col sm:flex-row gap-4 mb-4">
+                <div class="flex flex-col sm:flex-row gap-3 mb-4">
                     <input type="text" x-model="probeUrl" placeholder="https://station-website.com/"
-                        class="flex-1 px-4 py-2 border dark:border-gray-600 rounded-lg bg-gray-50 dark:bg-gray-700 w-full">
+                        class="flex-1 px-4 py-2 border dark:border-gray-600 rounded-lg bg-gray-50 dark:bg-gray-700 w-full focus:ring-2 focus:ring-blue-500 outline-none">
                     <button @click="probeStream()" :disabled="isProbing || !probeUrl"
-                        class="px-6 py-2 bg-blue-600 text-white font-semibold rounded-lg hover:bg-blue-700 disabled:opacity-50 w-full sm:w-32">
-                        <span x-text="isProbing ? 'Probing' : 'Probe'"></span>
+                        class="px-6 py-2 bg-blue-600 text-white font-semibold rounded-lg hover:bg-blue-700 disabled:opacity-50 w-full sm:w-32 transition-colors">
+                        <span x-text="isProbing ? 'Probing...' : 'Probe'"></span>
                     </button>
                 </div>
                 <template x-if="discoveredUrls.length > 0">
-                    <div class="p-4 bg-gray-50 dark:bg-gray-700 border dark:border-gray-600 rounded-lg">
+                    <div class="p-4 bg-gray-50 dark:bg-gray-700/50 border dark:border-gray-600 rounded-lg mt-4">
                         <p class="text-sm font-semibold mb-3">Select the correct stream (Test them below):</p>
                         <div class="space-y-3 max-h-72 overflow-y-auto mb-4 pr-2">
                             <template x-for="(url, index) in discoveredUrls" :key="index">
                                 <label
-                                    class="flex items-center gap-3 p-3 bg-white dark:bg-gray-800 border dark:border-gray-600 rounded-lg cursor-pointer"
-                                    :class="selectedUrl === url ? 'border-blue-500 ring-1 ring-blue-500' : ''">
-                                    <input type="radio" :value="url" x-model="selectedUrl" class="text-blue-600">
-                                    <div class="flex-1 min-w-0 w-full">
-                                        <div class="text-xs font-mono break-all text-gray-800 dark:text-gray-300 mb-2"
+                                    class="flex flex-col sm:flex-row items-start sm:items-center gap-3 p-3 bg-white dark:bg-gray-800 border dark:border-gray-600 rounded-lg cursor-pointer transition-shadow"
+                                    :class="selectedUrl === url ? 'border-blue-500 ring-1 ring-blue-500 shadow-md' : ''">
+                                    <div class="flex items-center gap-3 w-full sm:w-auto">
+                                        <input type="radio" :value="url" x-model="selectedUrl"
+                                            class="text-blue-600 w-4 h-4">
+                                        <div class="text-xs font-mono break-all text-gray-800 dark:text-gray-300 flex-1"
                                             x-text="url"></div>
-                                        <audio controls preload="none" :src="url" class="h-8 w-full max-w-md"></audio>
                                     </div>
+                                    <audio controls preload="none" :src="url"
+                                        class="h-8 w-full sm:w-64 mt-2 sm:mt-0 sm:ml-auto"></audio>
                                 </label>
                             </template>
                         </div>
-                        <div class="flex flex-col sm:flex-row gap-3 pt-3 border-t dark:border-gray-600">
+                        <div class="flex flex-col sm:flex-row gap-3 pt-4 border-t dark:border-gray-600">
                             <input type="text" x-model="streamLabel" placeholder="Station Label"
-                                class="px-3 py-2 border dark:border-gray-600 bg-white dark:bg-gray-800 rounded-lg flex-1 w-full">
+                                class="px-3 py-2 border dark:border-gray-600 bg-white dark:bg-gray-800 rounded-lg flex-1 w-full focus:ring-2 focus:ring-blue-500 outline-none">
                             <button @click="saveStream()"
-                                class="px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 w-full sm:w-auto"
+                                class="px-6 py-2 bg-green-600 text-white font-bold rounded-lg hover:bg-green-700 w-full sm:w-auto disabled:opacity-50 transition-colors"
                                 :disabled="!selectedUrl || !streamLabel">Save Stream</button>
                         </div>
                     </div>
                 </template>
             </div>
 
-            <div class="bg-white dark:bg-gray-800 rounded-lg shadow overflow-x-auto">
-                <table class="min-w-full divide-y divide-gray-200 dark:divide-gray-700">
-                    <thead class="bg-gray-100 dark:bg-gray-700">
-                        <tr>
-                            <th
-                                class="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase whitespace-nowrap">
-                                Label</th>
-                            <th
-                                class="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase whitespace-nowrap">
-                                Stream Source</th>
-                            <th
-                                class="px-4 py-3 text-right text-xs font-medium text-gray-500 dark:text-gray-300 uppercase whitespace-nowrap">
-                                Actions</th>
-                        </tr>
-                    </thead>
-                    <tbody class="divide-y divide-gray-200 dark:divide-gray-700">
-                        <template x-for="stream in streams" :key="stream.id">
-                            <tr class="bg-white dark:bg-gray-800">
-                                <td class="px-4 py-3 text-sm font-semibold whitespace-nowrap" x-text="stream.label">
-                                </td>
-                                <td class="px-4 py-3 text-sm text-gray-600 dark:text-gray-400 font-mono text-xs whitespace-nowrap"
-                                    x-text="stream.stream_url"></td>
-                                <td class="px-4 py-3 text-right flex justify-end items-center gap-4 whitespace-nowrap">
-                                    <button @click="togglePlay(stream.stream_url)" title="Toggle Playback"
-                                        class="text-xl hover:scale-125 transition-transform"
-                                        x-text="globalAudioUrl === stream.stream_url ? '⏹️' : '▶️'"></button>
-                                    <button @click="copyToClipboard(stream.stream_url)" title="Copy URL"
-                                        class="text-xl hover:scale-125 transition-transform">📋</button>
-                                    <button @click="renameStream(stream)" title="Edit Label"
-                                        class="text-xl hover:scale-125 transition-transform">✏️</button>
-                                    <button @click="startRecording(stream.id)"
-                                        class="text-green-600 dark:text-green-400 font-bold">Record</button>
-                                    <button @click="deleteStream(stream.id)"
-                                        class="text-red-600 dark:text-red-400 font-bold">Delete</button>
-                                </td>
-                            </tr>
-                        </template>
-                    </tbody>
-                </table>
+            <h2 class="text-xl font-bold mb-4">Saved Streams</h2>
+            <div class="space-y-4">
+                <template x-for="stream in streams" :key="stream.id">
+                    <div
+                        class="bg-white dark:bg-gray-800 p-4 rounded-lg shadow border border-gray-200 dark:border-gray-700 flex flex-col md:flex-row md:items-center gap-4 transition-colors">
+
+                        <!-- Details -->
+                        <div class="flex-1 min-w-0">
+                            <h3 class="text-lg font-bold mb-1 truncate" x-text="stream.label"></h3>
+                            <p class="text-sm text-gray-600 dark:text-gray-400 font-mono break-all line-clamp-2"
+                                x-text="stream.stream_url"></p>
+                        </div>
+
+                        <!-- Actions -->
+                        <div
+                            class="flex flex-wrap items-center gap-4 border-t md:border-t-0 md:border-l border-gray-200 dark:border-gray-700 pt-4 md:pt-0 md:pl-6 justify-between md:justify-end">
+                            <div class="flex gap-4">
+                                <button @click="togglePlay(stream.stream_url)" title="Toggle Playback"
+                                    class="text-2xl hover:scale-110 transition-transform"
+                                    x-text="globalAudioUrl === stream.stream_url ? '⏹️' : '▶️'"></button>
+                                <button @click="copyToClipboard(stream.stream_url)" title="Copy URL"
+                                    class="text-2xl hover:scale-110 transition-transform">📋</button>
+                                <button @click="renameStream(stream)" title="Edit Label"
+                                    class="text-2xl hover:scale-110 transition-transform">✏️</button>
+                            </div>
+                            <div class="flex gap-2 w-full sm:w-auto mt-2 sm:mt-0">
+                                <button @click="startRecording(stream.id)"
+                                    class="flex-1 sm:flex-none px-4 py-2 bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-400 hover:bg-green-200 dark:hover:bg-green-900/50 rounded-lg font-bold text-sm transition-colors text-center">Record</button>
+                                <button @click="deleteStream(stream.id)"
+                                    class="flex-1 sm:flex-none px-4 py-2 bg-red-100 dark:bg-red-900/30 text-red-700 dark:text-red-400 hover:bg-red-200 dark:hover:bg-red-900/50 rounded-lg font-bold text-sm transition-colors text-center">Delete</button>
+                            </div>
+                        </div>
+                    </div>
+                </template>
+                <div x-show="streams.length === 0"
+                    class="text-center py-10 bg-white dark:bg-gray-800 rounded-lg shadow text-gray-500 dark:text-gray-400 border border-gray-200 dark:border-gray-700">
+                    No streams saved in library.</div>
             </div>
         </div>
 
+        <!-- Schedules -->
         <div x-show="activeTab === 'schedules'" x-cloak>
-            <div class="bg-white dark:bg-gray-800 rounded-lg shadow p-4 sm:p-6 mb-6">
+            <div
+                class="bg-white dark:bg-gray-800 rounded-lg shadow p-4 sm:p-6 mb-6 border border-gray-200 dark:border-gray-700">
                 <h2 class="text-xl font-bold mb-4" x-text="editingScheduleId ? 'Edit Schedule' : 'Create New Schedule'">
                 </h2>
-                <div class="grid grid-cols-1 md:grid-cols-5 gap-4 items-end">
-                    <div>
-                        <label class="block text-sm font-medium mb-1">Target Stream</label>
+                <div class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-5 gap-4 items-end">
+                    <div class="sm:col-span-2 md:col-span-1">
+                        <label class="block text-sm font-medium mb-1 text-gray-700 dark:text-gray-300">Target
+                            Stream</label>
                         <select x-model="schedStreamId"
-                            class="w-full px-3 py-2 border dark:border-gray-600 rounded-lg bg-gray-50 dark:bg-gray-700">
+                            class="w-full px-3 py-2 border dark:border-gray-600 rounded-lg bg-gray-50 dark:bg-gray-700 focus:ring-2 focus:ring-blue-500 outline-none">
                             <option value="">Select Stream...</option>
                             <template x-for="s in streams" :key="s.id">
                                 <option :value="s.id" x-text="s.label"></option>
                             </template>
                         </select>
                     </div>
-                    <div>
-                        <label class="block text-sm font-medium mb-1">Description (Optional)</label>
+                    <div class="sm:col-span-2 md:col-span-1">
+                        <label
+                            class="block text-sm font-medium mb-1 text-gray-700 dark:text-gray-300">Description</label>
                         <input type="text" x-model="schedDescription" placeholder="e.g., Morning Show"
-                            class="w-full px-3 py-2 border dark:border-gray-600 rounded-lg bg-gray-50 dark:bg-gray-700">
+                            class="w-full px-3 py-2 border dark:border-gray-600 rounded-lg bg-gray-50 dark:bg-gray-700 focus:ring-2 focus:ring-blue-500 outline-none">
                     </div>
                     <div>
-                        <label class="block text-sm font-medium mb-1">Start Date & Time</label>
+                        <label class="block text-sm font-medium mb-1 text-gray-700 dark:text-gray-300">Start
+                            Time</label>
                         <input type="datetime-local" x-model="startTime"
-                            class="w-full px-3 py-2 border dark:border-gray-600 rounded-lg bg-gray-50 dark:bg-gray-700">
+                            class="w-full px-3 py-2 border dark:border-gray-600 rounded-lg bg-gray-50 dark:bg-gray-700 focus:ring-2 focus:ring-blue-500 outline-none">
                     </div>
                     <div>
-                        <label class="block text-sm font-medium mb-1">End Date & Time</label>
+                        <label class="block text-sm font-medium mb-1 text-gray-700 dark:text-gray-300">End Time</label>
                         <input type="datetime-local" x-model="endTime"
-                            class="w-full px-3 py-2 border dark:border-gray-600 rounded-lg bg-gray-50 dark:bg-gray-700">
+                            class="w-full px-3 py-2 border dark:border-gray-600 rounded-lg bg-gray-50 dark:bg-gray-700 focus:ring-2 focus:ring-blue-500 outline-none">
                     </div>
-                    <div class="flex gap-2">
+                    <div class="flex flex-col gap-2 sm:col-span-2 md:col-span-1">
                         <button @click="saveSchedule()"
-                            class="px-4 py-2 bg-blue-600 text-white font-semibold rounded-lg hover:bg-blue-700 w-full"
+                            class="px-4 py-2 bg-blue-600 text-white font-bold rounded-lg hover:bg-blue-700 w-full transition-colors shadow-sm"
                             x-text="editingScheduleId ? 'Update' : 'Schedule'"></button>
                         <template x-if="editingScheduleId">
                             <button @click="resetScheduleForm()"
-                                class="px-4 py-2 bg-gray-500 text-white font-semibold rounded-lg w-full">Cancel</button>
+                                class="px-4 py-2 bg-gray-500 text-white font-bold rounded-lg w-full transition-colors shadow-sm">Cancel</button>
                         </template>
                     </div>
                 </div>
             </div>
 
-            <div class="bg-white dark:bg-gray-800 rounded-lg shadow overflow-x-auto">
-                <table class="min-w-full divide-y divide-gray-200 dark:divide-gray-700">
-                    <thead class="bg-gray-100 dark:bg-gray-700">
-                        <tr>
-                            <th
-                                class="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase whitespace-nowrap">
-                                Stream</th>
-                            <th
-                                class="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase whitespace-nowrap">
-                                Description</th>
-                            <th
-                                class="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase whitespace-nowrap">
-                                Start Time</th>
-                            <th
-                                class="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase whitespace-nowrap">
-                                End Time</th>
-                            <th
-                                class="px-4 py-3 text-right text-xs font-medium text-gray-500 dark:text-gray-300 uppercase whitespace-nowrap">
-                                Actions</th>
-                        </tr>
-                    </thead>
-                    <tbody class="divide-y divide-gray-200 dark:divide-gray-700">
-                        <template x-for="sched in schedules" :key="sched.id">
-                            <tr class="bg-white dark:bg-gray-800">
-                                <td class="px-4 py-3 text-sm font-semibold whitespace-nowrap"
-                                    x-text="sched.stream_label || 'Unknown'"></td>
-                                <td class="px-4 py-3 text-sm whitespace-nowrap" x-text="sched.description || '-'"></td>
-                                <td class="px-4 py-3 text-sm whitespace-nowrap"
-                                    x-text="sched.start_time ? new Date(sched.start_time).toLocaleString() : 'N/A'">
-                                </td>
-                                <td class="px-4 py-3 text-sm whitespace-nowrap"
-                                    x-text="sched.end_time ? new Date(sched.end_time).toLocaleString() : 'N/A'"></td>
-                                <td class="px-4 py-3 text-right space-x-3 whitespace-nowrap">
-                                    <button @click="editSchedule(sched)"
-                                        class="text-blue-600 dark:text-blue-400 font-semibold">Edit</button>
-                                    <button @click="deleteSchedule(sched.id)"
-                                        class="text-red-600 dark:text-red-400 font-semibold">Delete</button>
-                                </td>
-                            </tr>
-                        </template>
-                    </tbody>
-                </table>
+            <h2 class="text-xl font-bold mb-4">Upcoming Events</h2>
+            <div class="space-y-4">
+                <template x-for="sched in schedules" :key="sched.id">
+                    <div
+                        class="bg-white dark:bg-gray-800 p-4 rounded-lg shadow border border-gray-200 dark:border-gray-700 flex flex-col md:flex-row md:items-center gap-4 transition-colors">
+
+                        <!-- Details -->
+                        <div class="flex-1 min-w-0">
+                            <div class="flex items-center gap-2 mb-2">
+                                <h3 class="text-lg font-bold truncate" x-text="sched.stream_label || 'Unknown'"></h3>
+                                <span
+                                    class="text-sm px-2 py-0.5 bg-gray-100 dark:bg-gray-700 rounded-full text-gray-600 dark:text-gray-300 truncate max-w-[50%]"
+                                    x-show="sched.description" x-text="sched.description"></span>
+                            </div>
+                            <div
+                                class="flex flex-col sm:flex-row sm:gap-6 text-sm text-gray-600 dark:text-gray-400 bg-gray-50 dark:bg-gray-900/50 p-2 rounded-lg border dark:border-gray-700 inline-flex w-full md:w-auto">
+                                <div class="flex items-center gap-2"><span class="font-bold">Start:</span> <span
+                                        x-text="sched.start_time ? new Date(sched.start_time).toLocaleString([], {month:'short', day:'numeric', hour:'2-digit', minute:'2-digit'}) : 'N/A'"></span>
+                                </div>
+                                <div
+                                    class="flex items-center gap-2 mt-1 sm:mt-0 border-t sm:border-t-0 sm:border-l border-gray-300 dark:border-gray-600 sm:pl-6">
+                                    <span class="font-bold">End:</span> <span
+                                        x-text="sched.end_time ? new Date(sched.end_time).toLocaleString([], {month:'short', day:'numeric', hour:'2-digit', minute:'2-digit'}) : 'N/A'"></span>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Actions -->
+                        <div
+                            class="flex items-center gap-3 border-t md:border-t-0 md:border-l border-gray-200 dark:border-gray-700 pt-4 md:pt-0 md:pl-6 justify-end">
+                            <button @click="editSchedule(sched)"
+                                class="flex-1 md:flex-none px-4 py-2 bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-400 hover:bg-blue-200 dark:hover:bg-blue-900/50 rounded-lg font-semibold text-sm transition-colors text-center">Edit</button>
+                            <button @click="deleteSchedule(sched.id)"
+                                class="flex-1 md:flex-none px-4 py-2 bg-red-100 dark:bg-red-900/30 text-red-700 dark:text-red-400 hover:bg-red-200 dark:hover:bg-red-900/50 rounded-lg font-semibold text-sm transition-colors text-center">Delete</button>
+                        </div>
+                    </div>
+                </template>
+                <div x-show="schedules.length === 0"
+                    class="text-center py-10 bg-white dark:bg-gray-800 rounded-lg shadow text-gray-500 dark:text-gray-400 border border-gray-200 dark:border-gray-700">
+                    No scheduled events.</div>
             </div>
         </div>
 
+        <!-- Settings -->
         <div x-show="activeTab === 'settings'" x-cloak class="space-y-6">
-
             <div
                 class="bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-lg shadow p-4 sm:p-6 flex flex-col sm:flex-row justify-between items-center gap-4">
                 <div class="text-center sm:text-left">
@@ -293,18 +286,18 @@
                 </button>
             </div>
 
-            <div class="grid grid-cols-1 md:grid-cols-2 gap-6 items-start">
-
+            <div class="grid grid-cols-1 lg:grid-cols-2 gap-6 items-start">
                 <div class="space-y-6">
-                    <div class="bg-white dark:bg-gray-800 rounded-lg shadow p-4 sm:p-6">
+                    <div
+                        class="bg-white dark:bg-gray-800 rounded-lg shadow p-4 sm:p-6 border border-gray-200 dark:border-gray-700">
                         <h2 class="text-xl font-bold mb-4 border-b dark:border-gray-700 pb-2">General Engine Settings
                         </h2>
                         <div class="space-y-4">
                             <div>
                                 <label class="block text-sm font-medium mb-1">Recordings Directory</label>
                                 <input type="text" x-model="settings.recordings_dir"
-                                    class="w-full px-3 py-2 border dark:border-gray-600 bg-gray-50 dark:bg-gray-700 rounded-lg">
-                                <p class="text-xs text-gray-500 dark:text-gray-400 mt-1">The internal folder path where
+                                    class="w-full px-3 py-2 border dark:border-gray-600 bg-gray-50 dark:bg-gray-700 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none">
+                                <p class="text-xs text-gray-500 dark:text-gray-400 mt-2">The internal folder path where
                                     MP3 files are written.</p>
                             </div>
                         </div>
@@ -312,31 +305,32 @@
 
                     <div class="bg-white dark:bg-gray-800 rounded-lg shadow p-4 sm:p-6 border-t-4 border-red-600">
                         <h2 class="text-xl font-bold mb-2 text-red-600 flex items-center gap-2">⚠️ Danger Zone</h2>
-                        <p class="text-sm text-gray-600 dark:text-gray-400 mb-4">
+                        <p class="text-sm text-gray-600 dark:text-gray-400 mb-5">
                             Need to start from scratch? This will wipe your database tables (streams, schedules,
                             settings, and recording histories).
                             Your physical audio files will remain safe on your drive, but the application engine will be
                             factory reset.
                         </p>
                         <button @click="purgeDatabase()"
-                            class="px-6 py-2 bg-red-600 text-white font-bold rounded-lg hover:bg-red-700 transition-colors shadow-sm w-full sm:w-auto">
+                            class="px-6 py-3 bg-red-600 text-white font-bold rounded-lg hover:bg-red-700 transition-colors shadow-sm w-full sm:w-auto">
                             Factory Reset & Purge Data
                         </button>
                     </div>
                 </div>
 
-                <div class="bg-white dark:bg-gray-800 rounded-lg shadow p-4 sm:p-6">
+                <div
+                    class="bg-white dark:bg-gray-800 rounded-lg shadow p-4 sm:p-6 border border-gray-200 dark:border-gray-700">
                     <h2 class="text-xl font-bold mb-4 border-b dark:border-gray-700 pb-2">Telegram Integration</h2>
 
-                    <div class="space-y-4 mb-6">
+                    <div class="space-y-4 mb-8">
                         <div>
                             <label class="block text-sm font-medium mb-1">Bot Token</label>
                             <div class="relative flex items-center">
                                 <input :type="showToken ? 'text' : 'password'" x-model="settings.telegram_token"
                                     placeholder="123456789:ABCdef..."
-                                    class="w-full px-3 py-2 pr-10 border dark:border-gray-600 bg-gray-50 dark:bg-gray-700 rounded-lg">
+                                    class="w-full px-3 py-2 pr-10 border dark:border-gray-600 bg-gray-50 dark:bg-gray-700 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none">
                                 <button type="button" @click="showToken = !showToken"
-                                    class="absolute right-2 px-2 py-1 text-gray-500 hover:text-gray-700 dark:hover:text-gray-300 transition-colors">
+                                    class="absolute right-2 px-2 py-1 text-gray-500 hover:text-gray-700 dark:hover:text-gray-300 transition-colors focus:outline-none">
                                     <span x-text="showToken ? '🙈' : '👁️'"></span>
                                 </button>
                             </div>
@@ -344,100 +338,107 @@
                         <div>
                             <label class="block text-sm font-medium mb-1">Chat ID</label>
                             <input type="text" x-model="settings.telegram_chat_id" placeholder="-1001234567890"
-                                class="w-full px-3 py-2 border dark:border-gray-600 bg-gray-50 dark:bg-gray-700 rounded-lg">
+                                class="w-full px-3 py-2 border dark:border-gray-600 bg-gray-50 dark:bg-gray-700 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none">
                         </div>
                     </div>
 
-                    <h3 class="font-bold mb-3 text-sm text-gray-500 dark:text-gray-400 uppercase tracking-wide">Alert Me
+                    <h3 class="font-bold mb-2 text-sm text-gray-500 dark:text-gray-400 uppercase tracking-wide">Alert Me
                         When...</h3>
-                    <p class="text-xs text-gray-500 mb-3">(Tip: You can edit the exact text of these messages by editing
-                        the <code>app/messages.json</code> file on your computer.)</p>
+                    <p class="text-xs text-gray-500 mb-4">(Tip: Edit <code>app/messages.json</code> on your server to
+                        customize text)</p>
                     <div class="space-y-3">
                         <div
-                            class="flex items-center justify-between bg-gray-50 dark:bg-gray-700 p-3 rounded-lg border dark:border-gray-600">
+                            class="flex flex-col sm:flex-row sm:items-center justify-between bg-gray-50 dark:bg-gray-700/50 p-3 rounded-lg border dark:border-gray-600 gap-3 sm:gap-0">
                             <label class="flex items-center gap-3 cursor-pointer">
                                 <input type="checkbox" x-model="settings.notif_manual_start"
-                                    class="w-5 h-5 text-blue-600 rounded bg-white dark:bg-gray-800 border-gray-300 dark:border-gray-600">
+                                    class="w-5 h-5 text-blue-600 rounded bg-white dark:bg-gray-800 border-gray-300 dark:border-gray-600 focus:ring-blue-500 focus:ring-2">
                                 <span class="text-sm font-semibold">I manually start a recording</span>
                             </label>
                             <button @click="testTelegram('notif_manual_start')"
-                                class="px-3 py-1 bg-gray-200 dark:bg-gray-600 text-xs font-bold rounded hover:bg-gray-300 dark:hover:bg-gray-500">TEST</button>
+                                class="px-4 py-1.5 bg-gray-200 dark:bg-gray-600 text-xs font-bold rounded-lg hover:bg-gray-300 dark:hover:bg-gray-500 transition-colors">TEST
+                                ALERTS</button>
                         </div>
 
                         <div
-                            class="flex items-center justify-between bg-gray-50 dark:bg-gray-700 p-3 rounded-lg border dark:border-gray-600">
+                            class="flex flex-col sm:flex-row sm:items-center justify-between bg-gray-50 dark:bg-gray-700/50 p-3 rounded-lg border dark:border-gray-600 gap-3 sm:gap-0">
                             <label class="flex items-center gap-3 cursor-pointer">
                                 <input type="checkbox" x-model="settings.notif_manual_stop"
-                                    class="w-5 h-5 text-blue-600 rounded bg-white dark:bg-gray-800 border-gray-300 dark:border-gray-600">
+                                    class="w-5 h-5 text-blue-600 rounded bg-white dark:bg-gray-800 border-gray-300 dark:border-gray-600 focus:ring-blue-500 focus:ring-2">
                                 <span class="text-sm font-semibold">I manually stop a recording</span>
                             </label>
                             <button @click="testTelegram('notif_manual_stop')"
-                                class="px-3 py-1 bg-gray-200 dark:bg-gray-600 text-xs font-bold rounded hover:bg-gray-300 dark:hover:bg-gray-500">TEST</button>
+                                class="px-4 py-1.5 bg-gray-200 dark:bg-gray-600 text-xs font-bold rounded-lg hover:bg-gray-300 dark:hover:bg-gray-500 transition-colors">TEST
+                                ALERTS</button>
                         </div>
 
                         <div
-                            class="flex items-center justify-between bg-gray-50 dark:bg-gray-700 p-3 rounded-lg border dark:border-gray-600">
+                            class="flex flex-col sm:flex-row sm:items-center justify-between bg-gray-50 dark:bg-gray-700/50 p-3 rounded-lg border dark:border-gray-600 gap-3 sm:gap-0">
                             <label class="flex items-center gap-3 cursor-pointer">
                                 <input type="checkbox" x-model="settings.notif_sched_start"
-                                    class="w-5 h-5 text-blue-600 rounded bg-white dark:bg-gray-800 border-gray-300 dark:border-gray-600">
+                                    class="w-5 h-5 text-blue-600 rounded bg-white dark:bg-gray-800 border-gray-300 dark:border-gray-600 focus:ring-blue-500 focus:ring-2">
                                 <span class="text-sm font-semibold">A scheduled recording starts</span>
                             </label>
                             <button @click="testTelegram('notif_sched_start')"
-                                class="px-3 py-1 bg-gray-200 dark:bg-gray-600 text-xs font-bold rounded hover:bg-gray-300 dark:hover:bg-gray-500">TEST</button>
+                                class="px-4 py-1.5 bg-gray-200 dark:bg-gray-600 text-xs font-bold rounded-lg hover:bg-gray-300 dark:hover:bg-gray-500 transition-colors">TEST
+                                ALERTS</button>
                         </div>
 
                         <div
-                            class="flex items-center justify-between bg-gray-50 dark:bg-gray-700 p-3 rounded-lg border dark:border-gray-600">
+                            class="flex flex-col sm:flex-row sm:items-center justify-between bg-gray-50 dark:bg-gray-700/50 p-3 rounded-lg border dark:border-gray-600 gap-3 sm:gap-0">
                             <label class="flex items-center gap-3 cursor-pointer">
                                 <input type="checkbox" x-model="settings.notif_sched_stop"
-                                    class="w-5 h-5 text-blue-600 rounded bg-white dark:bg-gray-800 border-gray-300 dark:border-gray-600">
+                                    class="w-5 h-5 text-blue-600 rounded bg-white dark:bg-gray-800 border-gray-300 dark:border-gray-600 focus:ring-blue-500 focus:ring-2">
                                 <span class="text-sm font-semibold">A scheduled recording finishes</span>
                             </label>
                             <button @click="testTelegram('notif_sched_stop')"
-                                class="px-3 py-1 bg-gray-200 dark:bg-gray-600 text-xs font-bold rounded hover:bg-gray-300 dark:hover:bg-gray-500">TEST</button>
+                                class="px-4 py-1.5 bg-gray-200 dark:bg-gray-600 text-xs font-bold rounded-lg hover:bg-gray-300 dark:hover:bg-gray-500 transition-colors">TEST
+                                ALERTS</button>
                         </div>
 
                         <div
-                            class="flex items-center justify-between bg-gray-50 dark:bg-gray-700 p-3 rounded-lg border dark:border-gray-600">
+                            class="flex flex-col sm:flex-row sm:items-center justify-between bg-gray-50 dark:bg-gray-700/50 p-3 rounded-lg border dark:border-gray-600 gap-3 sm:gap-0">
                             <label class="flex items-center gap-3 cursor-pointer">
                                 <input type="checkbox" x-model="settings.notif_stream_connected"
-                                    class="w-5 h-5 text-blue-600 rounded bg-white dark:bg-gray-800 border-gray-300 dark:border-gray-600">
+                                    class="w-5 h-5 text-blue-600 rounded bg-white dark:bg-gray-800 border-gray-300 dark:border-gray-600 focus:ring-blue-500 focus:ring-2">
                                 <span class="text-sm font-semibold">The audio stream connects</span>
                             </label>
                             <button @click="testTelegram('notif_stream_connected')"
-                                class="px-3 py-1 bg-gray-200 dark:bg-gray-600 text-xs font-bold rounded hover:bg-gray-300 dark:hover:bg-gray-500">TEST</button>
+                                class="px-4 py-1.5 bg-gray-200 dark:bg-gray-600 text-xs font-bold rounded-lg hover:bg-gray-300 dark:hover:bg-gray-500 transition-colors">TEST
+                                ALERTS</button>
                         </div>
 
                         <div
-                            class="flex items-center justify-between bg-gray-50 dark:bg-gray-700 p-3 rounded-lg border dark:border-gray-600">
+                            class="flex flex-col sm:flex-row sm:items-center justify-between bg-gray-50 dark:bg-gray-700/50 p-3 rounded-lg border dark:border-gray-600 gap-3 sm:gap-0">
                             <label class="flex items-center gap-3 cursor-pointer">
                                 <input type="checkbox" x-model="settings.notif_stream_disconnected"
-                                    class="w-5 h-5 text-blue-600 rounded bg-white dark:bg-gray-800 border-gray-300 dark:border-gray-600">
+                                    class="w-5 h-5 text-blue-600 rounded bg-white dark:bg-gray-800 border-gray-300 dark:border-gray-600 focus:ring-blue-500 focus:ring-2">
                                 <span class="text-sm font-semibold">The audio stream drops</span>
                             </label>
                             <button @click="testTelegram('notif_stream_disconnected')"
-                                class="px-3 py-1 bg-gray-200 dark:bg-gray-600 text-xs font-bold rounded hover:bg-gray-300 dark:hover:bg-gray-500">TEST</button>
+                                class="px-4 py-1.5 bg-gray-200 dark:bg-gray-600 text-xs font-bold rounded-lg hover:bg-gray-300 dark:hover:bg-gray-500 transition-colors">TEST
+                                ALERTS</button>
                         </div>
                     </div>
                 </div>
             </div>
-
         </div>
 
+        <!-- Logs -->
         <div x-show="activeTab === 'logs'" x-cloak>
-            <div class="bg-gray-900 rounded-lg shadow p-4 h-[600px] flex flex-col">
-                <div class="flex justify-between items-center mb-2">
+            <div class="bg-gray-900 rounded-lg shadow p-4 h-[600px] flex flex-col border border-gray-700">
+                <div class="flex justify-between items-center mb-4">
                     <h2 class="text-lg font-bold text-gray-100">Application Event Logs</h2>
                     <button @click="fetchLogs()"
-                        class="px-3 py-1 bg-gray-700 text-gray-200 rounded hover:bg-gray-600 text-sm">Refresh</button>
+                        class="px-4 py-1.5 bg-gray-700 text-gray-200 rounded-lg hover:bg-gray-600 font-semibold text-sm transition-colors">Refresh</button>
                 </div>
-                <pre class="flex-1 overflow-y-auto text-green-400 font-mono text-xs sm:text-sm p-4 bg-black rounded whitespace-pre-wrap"
+                <pre class="flex-1 overflow-y-auto text-green-400 font-mono text-xs sm:text-sm p-4 bg-black rounded-lg whitespace-pre-wrap"
                     x-text="appLogs"></pre>
             </div>
         </div>
 
     </div>
 
+    <!-- Fixed Audio Player -->
     <div
         class="fixed bottom-0 w-full bg-white dark:bg-gray-800 border-t dark:border-gray-700 p-3 shadow-[0_-4px_6px_-1px_rgba(0,0,0,0.1)] flex justify-center z-50">
         <audio id="global-audio-player" controls preload="none" :src="globalAudioUrl"
@@ -639,7 +640,6 @@
                     const toLocalInputFormat = (isoString) => {
                         if (!isoString) return '';
                         const d = new Date(isoString);
-                        // Subtract the timezone offset to align the UTC output with local time
                         const localDate = new Date(d.getTime() - (d.getTimezoneOffset() * 60000));
                         return localDate.toISOString().slice(0, 16);
                     };
