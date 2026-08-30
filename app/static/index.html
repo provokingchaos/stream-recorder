@@ -256,9 +256,10 @@
                 </div>
             </div>
 
+            <!-- Upcoming Events -->
             <h2 class="text-xl font-bold mb-4">Upcoming Events</h2>
             <div class="space-y-4">
-                <template x-for="sched in schedules" :key="sched.id">
+                <template x-for="sched in upcomingSchedules" :key="sched.id">
                     <div
                         class="bg-white dark:bg-gray-800 p-4 rounded-lg shadow border border-gray-200 dark:border-gray-700 flex flex-col md:flex-row md:items-center gap-4 transition-colors">
 
@@ -293,9 +294,52 @@
                         </div>
                     </div>
                 </template>
-                <div x-show="schedules.length === 0"
+                <div x-show="upcomingSchedules.length === 0"
                     class="text-center py-10 bg-white dark:bg-gray-800 rounded-lg shadow text-gray-500 dark:text-gray-400 border border-gray-200 dark:border-gray-700">
-                    No scheduled events.</div>
+                    None</div>
+            </div>
+
+            <!-- Past Events -->
+            <h2 class="text-xl font-bold mt-8 mb-4">Past Events</h2>
+            <div class="space-y-4">
+                <template x-for="sched in pastSchedules" :key="sched.id">
+                    <div
+                        class="bg-white dark:bg-gray-800 p-4 rounded-lg shadow border border-gray-200 dark:border-gray-700 flex flex-col md:flex-row md:items-center gap-4 transition-colors">
+
+                        <!-- Details -->
+                        <div class="flex-1 min-w-0">
+                            <div class="flex items-center gap-2 mb-2">
+                                <h3 class="text-lg font-bold truncate" x-text="sched.stream_label || 'Unknown'"></h3>
+                                <span
+                                    class="text-sm px-2 py-0.5 bg-gray-100 dark:bg-gray-700 rounded-full text-gray-600 dark:text-gray-300 truncate max-w-[50%]"
+                                    x-show="sched.description" x-text="sched.description"></span>
+                            </div>
+                            <div
+                                class="flex flex-col sm:flex-row sm:gap-6 text-sm text-gray-600 dark:text-gray-400 bg-gray-50 dark:bg-gray-900/50 p-2 rounded-lg border dark:border-gray-700 inline-flex w-full md:w-auto">
+                                <div class="flex items-center gap-2"><span class="font-bold">Start:</span> <span
+                                        x-text="sched.start_time ? new Date(sched.start_time).toLocaleString([], {month:'short', day:'numeric', hour:'2-digit', minute:'2-digit'}) : 'N/A'"></span>
+                                </div>
+                                <div
+                                    class="flex items-center gap-2 mt-1 sm:mt-0 border-t sm:border-t-0 sm:border-l border-gray-300 dark:border-gray-600 sm:pl-6">
+                                    <span class="font-bold">End:</span> <span
+                                        x-text="sched.end_time ? new Date(sched.end_time).toLocaleString([], {month:'short', day:'numeric', hour:'2-digit', minute:'2-digit'}) : 'N/A'"></span>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Actions -->
+                        <div
+                            class="flex items-center gap-3 border-t md:border-t-0 md:border-l border-gray-200 dark:border-gray-700 pt-4 md:pt-0 md:pl-6 justify-end">
+                            <button @click="editSchedule(sched)"
+                                class="flex-1 md:flex-none px-4 py-2 bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-400 hover:bg-blue-200 dark:hover:bg-blue-900/50 rounded-lg font-semibold text-sm transition-colors text-center">Edit</button>
+                            <button @click="deleteSchedule(sched.id)"
+                                class="flex-1 md:flex-none px-4 py-2 bg-red-100 dark:bg-red-900/30 text-red-700 dark:text-red-400 hover:bg-red-200 dark:hover:bg-red-900/50 rounded-lg font-semibold text-sm transition-colors text-center">Delete</button>
+                        </div>
+                    </div>
+                </template>
+                <div x-show="pastSchedules.length === 0"
+                    class="text-center py-10 bg-white dark:bg-gray-800 rounded-lg shadow text-gray-500 dark:text-gray-400 border border-gray-200 dark:border-gray-700">
+                    None</div>
             </div>
         </div>
 
@@ -408,7 +452,7 @@
                                 <span class="text-sm font-semibold">I manually start a recording</span>
                             </label>
                             <button @click="testTelegram('notif_manual_start')"
-                                class="px-4 py-1.5 bg-gray-200 dark:bg-gray-600 text-xs font-bold rounded-lg hover:bg-gray-300 dark:hover:bg-gray-500 transition-colors">TEST
+                                class="px-4 py-1.5 bg-gray-200 dark:bg-gray-600 text-xs font-bold rounded-lg hover:bg-gray-300 dark:hover:bg-gray-50 transition-colors">TEST
                                 ALERTS</button>
                         </div>
 
@@ -420,7 +464,7 @@
                                 <span class="text-sm font-semibold">I manually stop a recording</span>
                             </label>
                             <button @click="testTelegram('notif_manual_stop')"
-                                class="px-4 py-1.5 bg-gray-200 dark:bg-gray-600 text-xs font-bold rounded-lg hover:bg-gray-300 dark:hover:bg-gray-500 transition-colors">TEST
+                                class="px-4 py-1.5 bg-gray-200 dark:bg-gray-600 text-xs font-bold rounded-lg hover:bg-gray-300 dark:hover:bg-gray-50 transition-colors">TEST
                                 ALERTS</button>
                         </div>
 
@@ -432,7 +476,7 @@
                                 <span class="text-sm font-semibold">A scheduled recording starts</span>
                             </label>
                             <button @click="testTelegram('notif_sched_start')"
-                                class="px-4 py-1.5 bg-gray-200 dark:bg-gray-600 text-xs font-bold rounded-lg hover:bg-gray-300 dark:hover:bg-gray-500 transition-colors">TEST
+                                class="px-4 py-1.5 bg-gray-200 dark:bg-gray-600 text-xs font-bold rounded-lg hover:bg-gray-300 dark:hover:bg-gray-50 transition-colors">TEST
                                 ALERTS</button>
                         </div>
 
@@ -444,7 +488,7 @@
                                 <span class="text-sm font-semibold">A scheduled recording finishes</span>
                             </label>
                             <button @click="testTelegram('notif_sched_stop')"
-                                class="px-4 py-1.5 bg-gray-200 dark:bg-gray-600 text-xs font-bold rounded-lg hover:bg-gray-300 dark:hover:bg-gray-500 transition-colors">TEST
+                                class="px-4 py-1.5 bg-gray-200 dark:bg-gray-600 text-xs font-bold rounded-lg hover:bg-gray-300 dark:hover:bg-gray-50 transition-colors">TEST
                                 ALERTS</button>
                         </div>
 
@@ -456,7 +500,7 @@
                                 <span class="text-sm font-semibold">The audio stream connects</span>
                             </label>
                             <button @click="testTelegram('notif_stream_connected')"
-                                class="px-4 py-1.5 bg-gray-200 dark:bg-gray-600 text-xs font-bold rounded-lg hover:bg-gray-300 dark:hover:bg-gray-500 transition-colors">TEST
+                                class="px-4 py-1.5 bg-gray-200 dark:bg-gray-600 text-xs font-bold rounded-lg hover:bg-gray-300 dark:hover:bg-gray-50 transition-colors">TEST
                                 ALERTS</button>
                         </div>
 
@@ -468,7 +512,7 @@
                                 <span class="text-sm font-semibold">The audio stream drops</span>
                             </label>
                             <button @click="testTelegram('notif_stream_disconnected')"
-                                class="px-4 py-1.5 bg-gray-200 dark:bg-gray-600 text-xs font-bold rounded-lg hover:bg-gray-300 dark:hover:bg-gray-500 transition-colors">TEST
+                                class="px-4 py-1.5 bg-gray-200 dark:bg-gray-600 text-xs font-bold rounded-lg hover:bg-gray-300 dark:hover:bg-gray-50 transition-colors">TEST
                                 ALERTS</button>
                         </div>
                     </div>
@@ -521,6 +565,17 @@
                     : window.matchMedia('(prefers-color-scheme: dark)').matches,
                 showToken: false,
                 streams: [], recordings: [], schedules: [],
+
+                get upcomingSchedules() {
+                    const now = new Date();
+                    return this.schedules.filter(s => s.end_time && new Date(s.end_time) >= now);
+                },
+
+                get pastSchedules() {
+                    const now = new Date();
+                    return this.schedules.filter(s => s.end_time && new Date(s.end_time) < now);
+                },
+
                 probeUrl: '', discoveredUrls: [], selectedUrl: null, streamLabel: '',
                 schedStreamId: '', schedDescription: '', startTime: '', endTime: '', editingScheduleId: null,
                 globalAudioUrl: null,
