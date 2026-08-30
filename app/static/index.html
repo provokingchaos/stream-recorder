@@ -24,19 +24,19 @@
 
         <!-- Navigation Tabs -->
         <div class="flex flex-wrap gap-2 mb-6 border-b border-gray-300 dark:border-gray-700 pb-2">
-            <button @click="activeTab = 'dashboard'"
+            <button @click="switchTab('dashboard')"
                 :class="activeTab === 'dashboard' ? 'bg-blue-100 dark:bg-blue-900/50 text-blue-700 dark:text-blue-400' : 'text-gray-600 dark:text-gray-400 hover:bg-gray-200 dark:hover:bg-gray-800'"
                 class="px-4 py-2 rounded-lg font-semibold transition-colors focus:outline-none">Dashboard</button>
-            <button @click="activeTab = 'library'"
+            <button @click="switchTab('library')"
                 :class="activeTab === 'library' ? 'bg-blue-100 dark:bg-blue-900/50 text-blue-700 dark:text-blue-400' : 'text-gray-600 dark:text-gray-400 hover:bg-gray-200 dark:hover:bg-gray-800'"
                 class="px-4 py-2 rounded-lg font-semibold transition-colors focus:outline-none">Library</button>
-            <button @click="activeTab = 'schedules'"
+            <button @click="switchTab('schedules')"
                 :class="activeTab === 'schedules' ? 'bg-blue-100 dark:bg-blue-900/50 text-blue-700 dark:text-blue-400' : 'text-gray-600 dark:text-gray-400 hover:bg-gray-200 dark:hover:bg-gray-800'"
                 class="px-4 py-2 rounded-lg font-semibold transition-colors focus:outline-none">Schedules</button>
-            <button @click="activeTab = 'settings'"
+            <button @click="switchTab('settings')"
                 :class="activeTab === 'settings' ? 'bg-blue-100 dark:bg-blue-900/50 text-blue-700 dark:text-blue-400' : 'text-gray-600 dark:text-gray-400 hover:bg-gray-200 dark:hover:bg-gray-800'"
                 class="px-4 py-2 rounded-lg font-semibold transition-colors focus:outline-none">Settings</button>
-            <button @click="activeTab = 'logs'"
+            <button @click="switchTab('logs')"
                 :class="activeTab === 'logs' ? 'bg-blue-100 dark:bg-blue-900/50 text-blue-700 dark:text-blue-400' : 'text-gray-600 dark:text-gray-400 hover:bg-gray-200 dark:hover:bg-gray-800'"
                 class="px-4 py-2 rounded-lg font-semibold transition-colors focus:outline-none">App Logs</button>
         </div>
@@ -672,7 +672,7 @@
             <div class="bg-gray-900 rounded-lg shadow p-4 h-[600px] flex flex-col border border-gray-700">
                 <div class="flex justify-between items-center mb-4">
                     <h2 class="text-lg font-bold text-gray-100">Application Event Logs</h2>
-                    <button @click="fetchLogs()"
+                    <button @click="switchTab('logs')"
                         class="px-4 py-1.5 bg-gray-700 text-gray-200 rounded-lg hover:bg-gray-600 font-semibold text-sm transition-colors">Refresh</button>
                 </div>
                 <pre id="log-container"
@@ -739,6 +739,18 @@
                     this.darkMode = !this.darkMode;
                     localStorage.setItem('darkMode', this.darkMode);
                 },
+
+                switchTab(tab) {
+                    this.activeTab = tab;
+                    if (tab === 'logs') {
+                        this.fetchLogs();
+                        setTimeout(() => {
+                            const container = document.getElementById('log-container');
+                            if (container) container.scrollTop = container.scrollHeight;
+                        }, 100);
+                    }
+                },
+
                 formatSize(bytes) { return bytes ? (bytes / (1024 * 1024)).toFixed(2) + ' MB' : '0.00 MB'; },
                 formatDuration(seconds) {
                     if (!seconds) return '00:00:00';
@@ -765,11 +777,15 @@
                 fetchLogs() {
                     fetch('/api/logs').then(r => r.json()).then(d => {
                         const container = document.getElementById('log-container');
-                        const isAtBottom = container ? (container.scrollHeight - container.scrollTop <= container.clientHeight + 50) : true;
+                        let isAtBottom = true;
+
+                        if (this.activeTab === 'logs' && container) {
+                            isAtBottom = (container.scrollHeight - container.scrollTop <= container.clientHeight + 50);
+                        }
 
                         this.appLogs = d.logs;
 
-                        if (isAtBottom && container) {
+                        if (isAtBottom && this.activeTab === 'logs' && container) {
                             setTimeout(() => {
                                 container.scrollTop = container.scrollHeight;
                             }, 50);
