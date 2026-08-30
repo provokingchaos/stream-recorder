@@ -3,6 +3,7 @@ name: Build and Push to Docker Hub
 on:
   push:
     branches: [ "main" ]
+  workflow_dispatch:
 
 jobs:
   build-and-push:
@@ -31,6 +32,8 @@ jobs:
           push: true
           tags: |
             provokingchaos/stream-recorder:latest
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
 
       - name: Update Docker Hub Description
         uses: peter-evans/dockerhub-description@v4
