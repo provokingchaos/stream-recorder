@@ -77,6 +77,21 @@ class ScheduleCreateDate(BaseModel):
     end_time: str
     description: str = ""
 
+def resolve_recording_path(rec: dict) -> Optional[Path]:
+    """Check stored filepath first, then fall back to recordings_dir + filename."""
+    if rec.get("filepath"):
+        candidate = Path(rec["filepath"])
+        if candidate.exists() and candidate.is_file():
+            return candidate
+
+    if rec.get("filename"):
+        rec_dir = Path(get_setting("recordings_dir", "/recordings"))
+        candidate = rec_dir / os.path.basename(rec["filename"])
+        if candidate.exists() and candidate.is_file():
+            return candidate
+
+    return None
+
 @app.post("/api/streams/probe")
 async def probe_stream(req: StreamProbe):
     try:
@@ -125,7 +140,6 @@ async def start_recording(payload: ManualRecordRequest):
         if not stream:
             raise HTTPException(status_code=404, detail="Stream not found")
         
-        # 1. Create a database record FIRST to generate a valid recording_id
         cursor = conn.cursor()
         now_dt = datetime.datetime.now()
         cursor.execute(
@@ -135,7 +149,6 @@ async def start_recording(payload: ManualRecordRequest):
         recording_id = cursor.lastrowid
         conn.commit()
     
-    # 2. Instantiate with explicitly named arguments to prevent mismatches
     recorder = StreamRecorder(
         recording_id=recording_id,
         stream_id=stream["id"],
@@ -143,10 +156,8 @@ async def start_recording(payload: ManualRecordRequest):
         label=stream["label"]
     )
     
-    # 3. Add to the active dictionary so the "Stop" button works
     active_recordings[recording_id] = recorder
 
-    # 4. Dispatch Telegram notification
     try:
         start_str = datetime.datetime.now().strftime("%I:%M %p")
         send_telegram_notification(
@@ -244,12 +255,14 @@ async def delete_recording(rec_id: int):
         active_recordings.pop(rec_id, None)
 
     with get_db() as conn:
-        rec = conn.execute("SELECT filepath FROM recordings WHERE id = ?", (rec_id,)).fetchone()
-        if rec and Path(rec["filepath"]).exists():
-            try:
-                os.remove(rec["filepath"])
-            except OSError:
-                pass
+        rec = conn.execute("SELECT filepath, filename FROM recordings WHERE id = ?", (rec_id,)).fetchone()
+        if rec:
+            file_path = resolve_recording_path(dict(rec))
+            if file_path and file_path.exists():
+                try:
+                    os.remove(file_path)
+                except OSError:
+                    pass
         conn.execute("DELETE FROM recordings WHERE id = ?", (rec_id,))
         conn.commit()
     return {"success": True}
@@ -268,10 +281,29 @@ def get_logs():
 @app.get("/api/recordings/{rec_id}/play")
 def play_recording(rec_id: int):
     with get_db() as conn:
-        rec = conn.execute("SELECT filepath FROM recordings WHERE id = ?", (rec_id,)).fetchone()
+        rec = conn.execute("SELECT filepath, filename FROM recordings WHERE id = ?", (rec_id,)).fetchone()
         
-    if rec and rec["filepath"] and os.path.exists(rec["filepath"]):
-        return FileResponse(rec["filepath"], media_type="audio/mpeg")
+    if not rec:
+        raise HTTPException(status_code=404, detail="Recording record not found in database.")
+
+    file_path = resolve_recording_path(dict(rec))
+    if file_path:
+        return FileResponse(path=str(file_path), media_type="audio/mpeg")
+        
+    raise HTTPException(status_code=404, detail="Recording file not found on disk.")
+
+@app.get("/api/recordings/{rec_id}/download")
+def download_recording(rec_id: int):
+    with get_db() as conn:
+        rec = conn.execute("SELECT filepath, filename FROM recordings WHERE id = ?", (rec_id,)).fetchone()
+        
+    if not rec:
+        raise HTTPException(status_code=404, detail="Recording record not found in database.")
+
+    file_path = resolve_recording_path(dict(rec))
+    if file_path:
+        download_name = rec["filename"] or file_path.name
+        return FileResponse(path=str(file_path), media_type="audio/mpeg", filename=download_name)
         
     raise HTTPException(status_code=404, detail="Recording file not found on disk.")
 
@@ -288,16 +320,6 @@ def get_schedules():
             return [dict(r) for r in schedules]
         except Exception as e:
             return []
-
-@app.get("/api/recordings/{rec_id}/download")
-def download_recording(rec_id: int):
-    with get_db() as conn:
-        rec = conn.execute("SELECT filepath, filename FROM recordings WHERE id = ?", (rec_id,)).fetchone()
-        
-    if rec and rec["filepath"] and os.path.exists(rec["filepath"]):
-        return FileResponse(path=rec["filepath"], media_type="audio/mpeg", filename=rec["filename"])
-        
-    raise HTTPException(status_code=404, detail="Recording file not found on disk.")
 
 @app.post("/api/purge")
 def purge_database():
