@@ -80,6 +80,21 @@ async def _sniff_logic(target_url: str) -> list:
             "args": ["--no-sandbox", "--disable-dev-shm-usage", "--disable-gpu", "--autoplay-policy=no-user-gesture-required", "--mute-audio"]
         }
 
+        # Smarter fallback: works natively on macOS and inside Debian Docker containers
+        exec_path = None
+        for candidate in [
+            "/usr/bin/chromium", 
+            "/usr/bin/chromium-browser", 
+            "/usr/bin/google-chrome",
+            "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome"
+        ]:
+            if os.path.exists(candidate):
+                exec_path = candidate
+                break
+        
+        if exec_path:
+            launch_kwargs["executable_path"] = exec_path
+
         browser = await p.chromium.launch(**launch_kwargs)
         context = await browser.new_context(
             user_agent="Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36",
