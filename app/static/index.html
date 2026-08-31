@@ -193,7 +193,7 @@
                                         <div class="text-xs font-mono break-all text-gray-800 dark:text-gray-300 flex-1"
                                             x-text="url"></div>
                                     </div>
-                                    <audio controls preload="none" :src="url"
+                                    <audio controls preload="none" x-init="setupPreview($el, url)"
                                         class="h-8 w-full sm:w-64 mt-2 sm:mt-0 sm:ml-auto"></audio>
                                 </label>
                             </template>
@@ -686,8 +686,7 @@
     <!-- Fixed Audio Player -->
     <div
         class="fixed bottom-0 w-full bg-white dark:bg-gray-800 border-t dark:border-gray-700 p-3 shadow-[0_-4px_6px_-1px_rgba(0,0,0,0.1)] flex justify-center z-50">
-        <audio id="global-audio-player" controls preload="none" :src="globalAudioUrl"
-            class="w-full max-w-4xl h-10 outline-none"></audio>
+        <audio id="global-audio-player" controls preload="none" class="w-full max-w-4xl h-10 outline-none"></audio>
     </div>
 
     <script>
@@ -760,14 +759,61 @@
                     return `${h}:${m}:${s}`;
                 },
                 copyToClipboard(text) { navigator.clipboard.writeText(text).then(() => alert('URL copied!')); },
-                togglePlay(url) {
+
+                async togglePlay(url) {
                     const player = document.getElementById('global-audio-player');
+
                     if (this.globalAudioUrl === url && player && !player.paused) {
-                        player.pause(); this.globalAudioUrl = null;
+                        player.pause();
+                        this.globalAudioUrl = null;
+                        player.src = '';
                     } else {
                         this.globalAudioUrl = url;
-                        setTimeout(() => { document.getElementById('global-audio-player')?.play().catch(e => alert(e.message)); }, 100);
+
+                        let playUrl = url;
+                        const lUrl = url.toLowerCase();
+                        if (lUrl.includes('.pls') || (lUrl.includes('.m3u') && !lUrl.includes('.m3u8'))) {
+                            try {
+                                const res = await fetch('/api/streams/resolve', {
+                                    method: 'POST',
+                                    headers: { 'Content-Type': 'application/json' },
+                                    body: JSON.stringify({ url: url })
+                                });
+                                const data = await res.json();
+                                if (data.success && data.url) {
+                                    playUrl = data.url;
+                                }
+                            } catch (e) {
+                                console.error("Dynamic playlist resolve failed", e);
+                            }
+                        }
+
+                        setTimeout(() => {
+                            player.src = playUrl;
+                            player.play().catch(e => alert("Playback failed: " + e.message));
+                        }, 100);
                     }
+                },
+
+                async setupPreview(element, url) {
+                    let playUrl = url;
+                    const lUrl = url.toLowerCase();
+                    if (lUrl.includes('.pls') || (lUrl.includes('.m3u') && !lUrl.includes('.m3u8'))) {
+                        try {
+                            const res = await fetch('/api/streams/resolve', {
+                                method: 'POST',
+                                headers: { 'Content-Type': 'application/json' },
+                                body: JSON.stringify({ url: url })
+                            });
+                            const data = await res.json();
+                            if (data.success && data.url) {
+                                playUrl = data.url;
+                            }
+                        } catch (e) {
+                            console.error("Dynamic playlist resolve failed", e);
+                        }
+                    }
+                    element.src = playUrl;
                 },
 
                 fetchStreams() { fetch('/api/streams').then(r => r.json()).then(d => this.streams = d); },

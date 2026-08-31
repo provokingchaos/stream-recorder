@@ -1,141 +1,203 @@
 import re
+import os
+import sys
 import asyncio
-import httpx
-import yt_dlp
-import ipaddress
-import socket
+import urllib.parse
 from playwright.async_api import async_playwright
-from urllib.parse import urlparse
+import yt_dlp
+import httpx
 
-async def is_safe_url(target_url: str) -> bool:
-    """Sanitizes user input to prevent Server-Side Request Forgery (SSRF) and DNS Rebinding."""
-    if not target_url.startswith(("http://", "https://")):
-        return False
-        
+class QuietLogger:
+    def debug(self, msg): pass
+    def warning(self, msg): pass
+    def error(self, msg): pass
+
+NON_AUDIO_EXTENSIONS = (
+    '.ttf', '.woff', '.woff2', '.eot', '.otf',
+    '.html', '.htm', '.js', '.css', '.json',
+    '.png', '.jpg', '.jpeg', '.gif', '.svg', '.webp', '.ico', '.ts'
+)
+
+def is_valid_audio_candidate(url: str) -> bool:
+    clean_url = url.split('?')[0].lower()
+    if clean_url.endswith(NON_AUDIO_EXTENSIONS): return False
+    if any(ignore in clean_url for ignore in ['google-analytics', 'googlesyndication', 'doubleclick', 'hotjar', 'facebook']): return False
+    return True
+
+async def resolve_live365(station_id: str) -> str:
     try:
-        parsed = urlparse(target_url)
-        hostname = parsed.hostname
-        if not hostname:
-            return False
-            
-        if hostname.lower() in ("localhost", "127.0.0.1", "0.0.0.0", "::1"):
-            return False
+        api_url = f"https://api.live365.com/station/{station_id}"
+        async with httpx.AsyncClient(timeout=10.0) as client:
+            res = await client.get(api_url)
+            if res.status_code == 200:
+                data = res.json()
+                for key in ["stream-url", "stream_url", "direct-stream-url"]:
+                    if key in data and data[key]: return data[key]
+    except Exception: pass
+    return None
 
-        # If the hostname is already an IP, check it immediately
+async def _sniff_logic(target_url: str) -> list:
+    loop = asyncio.get_running_loop()
+    found_media = set()
+
+    # 1. Live365 direct URL match
+    parsed = urllib.parse.urlparse(target_url)
+    if parsed.netloc == "live365.com" or parsed.netloc.endswith(".live365.com"):
+        params = urllib.parse.parse_qs(parsed.query)
+        if "station" in params:
+            live365_stream = await resolve_live365(params["station"][0])
+            if live365_stream: found_media.add(live365_stream)
+
+    # 2. yt-dlp aggregation
+    def try_ytdlp(url):
+        ydl_opts = {'logger': QuietLogger(), 'quiet': True, 'skip_download': True, 'extract_flat': False, 'no_warnings': True, 'ignoreerrors': True}
+        urls = []
         try:
-            ip = ipaddress.ip_address(hostname)
-            if ip.is_private or ip.is_loopback or ip.is_unspecified:
-                return False
-            return True
-        except ValueError:
-            pass
-
-        # Resolve standard domains via OS DNS to actively block DNS Rebinding attacks
-        loop = asyncio.get_running_loop()
-        ip = await loop.run_in_executor(None, socket.gethostbyname, hostname)
-        
-        ip_obj = ipaddress.ip_address(ip)
-        if ip_obj.is_private or ip_obj.is_loopback or ip_obj.is_unspecified:
-            return False
-            
-        return True
-    except Exception:
-        return False
-
-async def fetch_playlist(url: str):
-    if not await is_safe_url(url):
-        return []
-        
-    urls = []
-    try:
-        async with httpx.AsyncClient(verify=False, follow_redirects=True, timeout=10.0) as client:
-            # codeql[py/full-ssrf] - SSRF is fully mitigated by is_safe_url which performs DNS resolution and private IP blocking
-            resp = await client.get(url)  # lgtm [py/full-ssrf]
-            resp.raise_for_status()
-            text = resp.text
-            
-            # Parse .pls format (looks for File1=http...)
-            if re.search(r'^File\d+=', text, re.IGNORECASE | re.MULTILINE):
-                matches = re.findall(r'^File\d+=(.+)$', text, re.MULTILINE | re.IGNORECASE)
-                urls.extend([m.strip() for m in matches if m.strip()])
-            
-            # Parse standard .m3u format (ignores # comment lines)
-            else:
-                for line in text.splitlines():
-                    line = line.strip()
-                    if line and not line.startswith('#'):
-                        urls.append(line)
-    except Exception as e:
-        print(f"Playlist extraction error: {e}")
-    return urls
-
-async def sniff_stream_url(url: str):
-    if not await is_safe_url(url):
-        raise ValueError("URL failed security validation. Scheme must be HTTP/HTTPS and cannot be a private IP.")
-
-    discovered = []
-    
-    # 1. Direct Playlist Parsing (.pls / .m3u)
-    parsed_main = urlparse(url)
-    if parsed_main.path.lower().endswith(('.pls', '.m3u')) or 'playlist' in parsed_main.path.lower():
-        playlist_urls = await fetch_playlist(url)
-        if playlist_urls:
-            return playlist_urls
-
-    # 2. YT-DLP Extraction (Great for YouTube, Twitch, Mixcloud, etc.)
-    def extract_ydl():
-        ydl_opts = {'quiet': True, 'extract_flat': True, 'no_warnings': True}
-        with yt_dlp.YoutubeDL(ydl_opts) as ydl:
-            try:
+            with yt_dlp.YoutubeDL(ydl_opts) as ydl:
                 info = ydl.extract_info(url, download=False)
-                if info and 'url' in info:
-                    return [info['url']]
+                if info and 'url' in info and is_valid_audio_candidate(info['url']): urls.append(info['url'])
                 if info and 'entries' in info:
-                    return [entry['url'] for entry in info['entries'] if 'url' in entry]
-            except Exception:
-                pass
-        return []
-        
+                    for e in info['entries']:
+                        if e.get('url') and is_valid_audio_candidate(e['url']): urls.append(e['url'])
+        except Exception: pass
+        return urls
+
     try:
-        ydl_results = await asyncio.to_thread(extract_ydl)
-        if ydl_results:
-            discovered.extend(ydl_results)
-    except Exception:
-        pass
+        resolved_list = await loop.run_in_executor(None, try_ytdlp, target_url)
+        if resolved_list:
+            for r in resolved_list: found_media.add(r)
+    except Exception: pass
+
+    # 3. Playwright browser aggregation
+    stream_patterns = re.compile(
+        r'(\.m3u8|\.mp3|\.aac|\.ogg|\.opus|/stream|/live|/listen|/icecast|/shoutcast|/audio|/hls|cdnstream\.com)',
+        re.IGNORECASE
+    )
+
+    async with async_playwright() as p:
+        launch_kwargs = {
+            "headless": True,
+            "args": ["--no-sandbox", "--disable-dev-shm-usage", "--disable-gpu", "--autoplay-policy=no-user-gesture-required", "--mute-audio"]
+        }
+
+        # Smarter fallback: works natively on macOS and inside Debian Docker containers
+        exec_path = None
+        for candidate in [
+            "/usr/bin/chromium", 
+            "/usr/bin/chromium-browser", 
+            "/usr/bin/google-chrome",
+            "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome"
+        ]:
+            if os.path.exists(candidate):
+                exec_path = candidate
+                break
         
-    # 3. Playwright Headless Sniffing (Catches hidden network requests on websites)
-    async def run_playwright():
-        streams = []
+        if exec_path:
+            launch_kwargs["executable_path"] = exec_path
+
+        browser = await p.chromium.launch(**launch_kwargs)
+        context = await browser.new_context(
+            user_agent="Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36",
+            ignore_https_errors=True,
+            viewport={"width": 1280, "height": 800}
+        )
+
+        def handle_request(request):
+            url = request.url
+            if not is_valid_audio_candidate(url): return
+            if request.resource_type == "media" or stream_patterns.search(url):
+                found_media.add(url)
+
+        async def inspect_response(response):
+            try:
+                url = response.url
+                if not is_valid_audio_candidate(url): return
+                content_type = response.headers.get("content-type", "").lower()
+                if any(m in content_type for m in ["audio/", "application/vnd.apple.mpegurl", "application/x-mpegurl", "application/ogg"]):
+                    found_media.add(url)
+            except Exception: pass
+
+        async def execute_interactions(target_page):
+            try:
+                station_ids = await target_page.evaluate("""() => {
+                    return Array.from(document.querySelectorAll('iframe'))
+                        .map(f => f.src.match(/station=([a-zA-Z0-9_\\-]+)/))
+                        .filter(m => m).map(m => m[1]);
+                }""")
+                for sid in station_ids:
+                    l365 = await resolve_live365(sid)
+                    if l365: found_media.add(l365)
+            except Exception: pass
+
+            try:
+                iframes = await target_page.locator("iframe").all()
+                for frame_loc in iframes:
+                    try:
+                        box = await frame_loc.evaluate("""el => {
+                            const rect = el.getBoundingClientRect();
+                            return {x: rect.x, y: rect.y, width: rect.width, height: rect.height};
+                        }""")
+                        if box and box["width"] > 0:
+                            await target_page.mouse.click(box["x"] + box["width"] / 2, box["y"] + box["height"] / 2)
+                            await asyncio.sleep(0.5)
+                    except Exception: pass
+            except Exception: pass
+
+            click_js = """() => {
+                const selectors = ['button:not([disabled])', '[aria-label*="play" i]', '[title*="play" i]', '.play-button', '.play', 'audio', 'video'];
+                selectors.forEach(sel => {
+                    document.querySelectorAll(sel).forEach(el => {
+                        try { el.click(); } catch(e){}
+                        try { if (el.play) el.play(); } catch(e){}
+                    });
+                });
+            }"""
+            try: await target_page.evaluate(click_js)
+            except Exception: pass
+            for frame in target_page.frames:
+                try: await frame.evaluate(click_js)
+                except Exception: pass
+
         try:
-            async with async_playwright() as p:
-                browser = await p.chromium.launch(headless=True)
-                page = await browser.new_page()
-                
-                # Intercept network traffic looking for audio extensions OR playlists
-                page.on("request", lambda request: streams.append(request.url) if re.search(r'\.(mp3|aac|m4a|ogg|wav|m3u8|pls|m3u)', request.url.lower()) or 'playlist' in request.url.lower() else None)
-                
-                await page.goto(url, wait_until="networkidle", timeout=15000)
-                await asyncio.sleep(3) # Wait a few seconds for dynamic players to load
-                await browser.close()
-        except Exception:
-            pass
-        return streams
+            page = await context.new_page()
+            page.on("request", handle_request)
+            page.on("response", inspect_response)
 
-    pw_results = await run_playwright()
-    discovered.extend(pw_results)
+            await page.goto(target_url, wait_until="domcontentloaded", timeout=20000)
+            await asyncio.sleep(2)
+            await execute_interactions(page)
+            
+            # Wait 5 seconds to gather network payloads, do not exit early
+            await asyncio.sleep(5)
+
+            iframe_srcs = await page.evaluate("Array.from(document.querySelectorAll('iframe')).map(f => f.src).filter(Boolean)")
+            for src in iframe_srcs:
+                if "javascript:" in src or "google" in src: continue
+                try:
+                    widget_page = await context.new_page()
+                    widget_page.on("request", handle_request)
+                    widget_page.on("response", inspect_response)
+                    await widget_page.goto(src, wait_until="domcontentloaded", timeout=15000)
+                    await asyncio.sleep(2)
+                    vp = widget_page.viewport_size
+                    await widget_page.mouse.click(vp["width"] / 2, vp["height"] / 2)
+                    await execute_interactions(widget_page)
+                    await asyncio.sleep(4)
+                    await widget_page.close()
+                except Exception: pass
+
+        except Exception as e:
+            print(f"[Sniffer Error] {e}", file=sys.stderr, flush=True)
+        finally:
+            await browser.close()
+
+    if found_media:
+        return list(found_media)
     
-    # 4. Post-Process: If Playwright intercepted a hidden playlist file, crack it open now
-    final_urls = []
-    for d_url in set(discovered):
-        parsed_d = urlparse(d_url)
-        if parsed_d.path.lower().endswith(('.pls', '.m3u')) or 'playlist' in parsed_d.path.lower():
-            extracted = await fetch_playlist(d_url)
-            final_urls.extend(extracted)
-        else:
-            final_urls.append(d_url)
+    raise ValueError("Could not resolve any audio streams. The site may be heavily protected.")
 
-    if final_urls:
-        return list(set(final_urls))
-        
-    # 5. Fallback: If absolutely nothing is found, return the original URL
-    return [url]
+async def sniff_stream_url(target_url: str) -> list:
+    try:
+        return await asyncio.wait_for(_sniff_logic(target_url), timeout=50.0)
+    except asyncio.TimeoutError:
+        raise ValueError("Extraction timed out. The page took too long.")

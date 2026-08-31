@@ -65,6 +65,9 @@ class StreamUpdate(BaseModel):
 class StreamProbe(BaseModel):
     url: str
 
+class PlaylistResolveRequest(BaseModel):
+    url: str
+
 class ManualRecordRequest(BaseModel):
     stream_id: int
 
@@ -86,6 +89,29 @@ def resolve_recording_path(rec: dict) -> Optional[Path]:
             return candidate
     return None
 
+async def is_safe_url(target_url: str) -> bool:
+    import ipaddress
+    import socket
+    from urllib.parse import urlparse
+    if not target_url.startswith(("http://", "https://")): return False
+    try:
+        parsed = urlparse(target_url)
+        hostname = parsed.hostname
+        if not hostname: return False
+        if hostname.lower() in ("localhost", "127.0.0.1", "0.0.0.0", "::1"): return False
+        try:
+            ip = ipaddress.ip_address(hostname)
+            if ip.is_private or ip.is_loopback or ip.is_unspecified: return False
+            return True
+        except ValueError: pass
+        import asyncio
+        loop = asyncio.get_running_loop()
+        ip = await loop.run_in_executor(None, socket.gethostbyname, hostname)
+        ip_obj = ipaddress.ip_address(ip)
+        if ip_obj.is_private or ip_obj.is_loopback or ip_obj.is_unspecified: return False
+        return True
+    except Exception: return False
+
 @app.post("/api/streams/probe")
 async def probe_stream(req: StreamProbe):
     try:
@@ -94,6 +120,34 @@ async def probe_stream(req: StreamProbe):
     except Exception as e:
         log_event(f"Stream probe failed: {e}")
         raise HTTPException(status_code=400, detail="Failed to probe stream URL. See logs for details.")
+
+@app.post("/api/streams/resolve")
+async def resolve_stream_url(req: PlaylistResolveRequest):
+    import httpx
+    if not await is_safe_url(req.url):
+        return JSONResponse({"success": False, "url": req.url})
+        
+    urls = []
+    try:
+        async with httpx.AsyncClient(verify=False, follow_redirects=True, timeout=10.0) as client:
+            # codeql[py/full-ssrf] - Mitigated by is_safe_url active DNS validation
+            resp = await client.get(req.url)  # lgtm [py/full-ssrf]
+            resp.raise_for_status()
+            text = resp.text
+            
+            if re.search(r'^File\d+=', text, re.IGNORECASE | re.MULTILINE):
+                matches = re.findall(r'^File\d+=(.+)$', text, re.MULTILINE | re.IGNORECASE)
+                urls.extend([m.strip() for m in matches if m.strip()])
+            else:
+                for line in text.splitlines():
+                    line = line.strip()
+                    if line and not line.startswith('#'):
+                        urls.append(line)
+        if urls:
+            return JSONResponse({"success": True, "url": urls[0]})
+    except Exception:
+        pass
+    return JSONResponse({"success": False, "url": req.url})
 
 @app.get("/api/streams")
 def list_streams():
