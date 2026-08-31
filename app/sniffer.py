@@ -103,9 +103,6 @@ async def sniff_stream_url(url: str):
     except Exception:
         pass
         
-    if discovered:
-        return list(set(discovered))
-        
     # 3. Playwright Headless Sniffing (Catches hidden network requests on websites)
     async def run_playwright():
         streams = []
@@ -114,8 +111,8 @@ async def sniff_stream_url(url: str):
                 browser = await p.chromium.launch(headless=True)
                 page = await browser.new_page()
                 
-                # Intercept network traffic looking for audio extensions
-                page.on("request", lambda request: streams.append(request.url) if re.search(r'\.(mp3|aac|m4a|ogg|wav|m3u8)', request.url.lower()) else None)
+                # Intercept network traffic looking for audio extensions OR playlists
+                page.on("request", lambda request: streams.append(request.url) if re.search(r'\.(mp3|aac|m4a|ogg|wav|m3u8|pls|m3u)', request.url.lower()) or 'playlist' in request.url.lower() else None)
                 
                 await page.goto(url, wait_until="networkidle", timeout=15000)
                 await asyncio.sleep(3) # Wait a few seconds for dynamic players to load
@@ -127,8 +124,18 @@ async def sniff_stream_url(url: str):
     pw_results = await run_playwright()
     discovered.extend(pw_results)
     
-    # 4. Fallback: If absolutely nothing is found, return the original URL
-    if not discovered:
-        discovered.append(url)
+    # 4. Post-Process: If Playwright intercepted a hidden playlist file, crack it open now
+    final_urls = []
+    for d_url in set(discovered):
+        parsed_d = urlparse(d_url)
+        if parsed_d.path.lower().endswith(('.pls', '.m3u')) or 'playlist' in parsed_d.path.lower():
+            extracted = await fetch_playlist(d_url)
+            final_urls.extend(extracted)
+        else:
+            final_urls.append(d_url)
+
+    if final_urls:
+        return list(set(final_urls))
         
-    return list(set(discovered))
+    # 5. Fallback: If absolutely nothing is found, return the original URL
+    return [url]
