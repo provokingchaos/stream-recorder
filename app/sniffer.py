@@ -2,13 +2,45 @@ import re
 import asyncio
 import httpx
 import yt_dlp
+import ipaddress
 from playwright.async_api import async_playwright
 from urllib.parse import urlparse
 
+def is_safe_url(target_url: str) -> bool:
+    """Sanitizes user input to prevent Server-Side Request Forgery (SSRF)."""
+    # Enforce strict HTTP/HTTPS schemes
+    if not target_url.startswith(("http://", "https://")):
+        return False
+        
+    try:
+        parsed = urlparse(target_url)
+        hostname = parsed.hostname
+        if not hostname:
+            return False
+            
+        # Block obvious local SSRF targets
+        if hostname.lower() in ("localhost", "127.0.0.1", "0.0.0.0", "::1"):
+            return False
+
+        # Block internal/private network IP address ranges
+        try:
+            ip = ipaddress.ip_address(hostname)
+            if ip.is_private or ip.is_loopback or ip.is_unspecified:
+                return False
+        except ValueError:
+            pass # It is a standard domain name, which is safe to proceed
+            
+        return True
+    except Exception:
+        return False
+
 async def fetch_playlist(url: str):
+    if not is_safe_url(url):
+        return []
+        
     urls = []
     try:
-        # Fetch the plain text of the .pls or .m3u file
+        # Fetch the plain text of the .pls or .m3u file safely
         async with httpx.AsyncClient(verify=False, follow_redirects=True, timeout=10.0) as client:
             resp = await client.get(url)
             resp.raise_for_status()
@@ -30,6 +62,9 @@ async def fetch_playlist(url: str):
     return urls
 
 async def sniff_stream_url(url: str):
+    if not is_safe_url(url):
+        raise ValueError("URL failed security validation. Scheme must be HTTP/HTTPS and cannot be a private IP.")
+        
     discovered = []
     
     # 1. Direct Playlist Parsing (.pls / .m3u)
